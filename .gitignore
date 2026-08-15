@@ -1,0 +1,9 @@
+.env
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.venv/
+pipeline/artifacts/*
+!pipeline/artifacts/.gitkeep
+.mise.local.toml

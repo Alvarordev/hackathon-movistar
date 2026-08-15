@@ -1,0 +1,63 @@
+name: copiloto-nbo
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nbo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nbo}
+      POSTGRES_DB: ${POSTGRES_DB:-nbo}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nbo} -d ${POSTGRES_DB:-nbo}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-nbo}:${POSTGRES_PASSWORD:-nbo}@db:5432/${POSTGRES_DB:-nbo}
+      AI_PROVIDER: ${AI_PROVIDER:-google}
+      AI_MODEL: ${AI_MODEL:-gemini-2.0-flash}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      NODE_ENV: development
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pipeline:
+    build:
+      context: ./pipeline
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-nbo}:${POSTGRES_PASSWORD:-nbo}@db:5432/${POSTGRES_DB:-nbo}
+      DATA_DIR: /data
+      ARTIFACTS_DIR: /artifacts
+    volumes:
+      - ./data:/data:ro
+      - ./db/migrations:/db/migrations:ro
+      - ./pipeline/src:/app/src
+      - ./pipeline/artifacts:/artifacts
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["tools"]
+
+volumes:
+  pgdata:
