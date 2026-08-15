@@ -33,6 +33,9 @@ services:
       timeout: 5s
       retries: 10
       start_period: 180s
+    # Se mide en ~90-120 MB sirviendo, pero el límite cubre además el pico
+    # puntual del primer arranque, cuando restaura el dump y crea los índices
+    # de nbo_scores (597k filas).
     mem_limit: 512m
     restart: unless-stopped
 
@@ -62,7 +65,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    mem_limit: 512m
+    # Medido en 57-64 MB con el build standalone. 256 MB es 4x eso: suficiente
+    # margen para un pico real, pero lo bastante ajustado como para que una
+    # fuga nuestra muera acá y no arrastre a los contenedores vecinos.
+    mem_limit: 256m
     restart: unless-stopped
 
 volumes:
