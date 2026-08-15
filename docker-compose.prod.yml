@@ -18,7 +18,7 @@ name: copiloto-nbo
 
 services:
   db:
-    image: ${IMAGE_DB:-ghcr.io/OWNER/copiloto-nbo-db}:${IMAGE_TAG:-latest}
+    image: ${IMAGE_DB:-ghcr.io/alvarordev/copiloto-nbo-db}:${IMAGE_TAG:-latest}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nbo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ${IMAGE_WEB:-ghcr.io/OWNER/copiloto-nbo-web}:${IMAGE_TAG:-latest}
+    image: ${IMAGE_WEB:-ghcr.io/alvarordev/copiloto-nbo-web}:${IMAGE_TAG:-latest}
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-nbo}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nbo}
       NODE_ENV: production
