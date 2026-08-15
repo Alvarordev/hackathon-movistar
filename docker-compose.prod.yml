@@ -1,0 +1,69 @@
+# Despliegue en VPS con Dokploy.
+#
+# Diferencias con docker-compose.yml (desarrollo):
+#   - Imágenes de GHCR, sin `build` ni montajes de código fuente.
+#   - Postgres NO publica puerto: solo se le llega por la red interna.
+#   - NODE_ENV=production.
+#   - Techos de memoria: el VPS comparte 4 GB con la producción de otro
+#     proyecto, y sin límites un pico nuestro haría que el OOM killer del
+#     kernel matara contenedores ajenos.
+#   - Sin servicio `pipeline`: el VPS solo sirve la app. Los datos vienen ya
+#     calculados dentro de la imagen de la base.
+#
+# Variables que Dokploy debe inyectar (nunca en el repo):
+#   IMAGE_TAG, POSTGRES_PASSWORD, AI_PROVIDER, AI_MODEL,
+#   GOOGLE_GENERATIVE_AI_API_KEY
+
+name: copiloto-nbo
+
+services:
+  db:
+    image: ${IMAGE_DB:-ghcr.io/OWNER/copiloto-nbo-db}:${IMAGE_TAG:-latest}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nbo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-nbo}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nbo} -d ${POSTGRES_DB:-nbo}"]
+      # La primera vez restaura 25 MB comprimidos: se le da margen con
+      # start_period para que no lo declaren enfermo mientras siembra.
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+    mem_limit: 512m
+    restart: unless-stopped
+
+  web:
+    image: ${IMAGE_WEB:-ghcr.io/OWNER/copiloto-nbo-web}:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-nbo}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nbo}
+      NODE_ENV: production
+      AI_PROVIDER: ${AI_PROVIDER:-google}
+      AI_MODEL: ${AI_MODEL:-gemini-2.0-flash}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      # Traefik (que gestiona Dokploy) publica el dominio contra este puerto.
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 512m
+    restart: unless-stopped
+
+volumes:
+  pgdata:

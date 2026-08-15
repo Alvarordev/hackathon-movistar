@@ -1,4 +1,5 @@
 import { stepCountIs, streamText } from "ai";
+import { z } from "zod";
 
 import { systemPrompt } from "@/ai/prompt";
 import { tools } from "@/ai/tools";
@@ -17,10 +18,28 @@ export const maxDuration = 60;
 /** Pasos máximos del loop de tool calling antes de cortar. */
 const MAX_PASOS = 6;
 
-interface Mensaje {
-  role: "user" | "assistant";
-  content: string;
-}
+/**
+ * Cota de la entrada antes de mandarla a un proveedor que cobra por token.
+ *
+ * No es una medida de seguridad —el endpoint es público a propósito— sino de
+ * robustez: sin esto, un bucle del frontend o un pegado gigante se convierten
+ * en una factura o en un request colgado. Los topes son holgados para
+ * cualquier conversación real de un asesor.
+ */
+const PeticionChat = z.object({
+  cliente_id: z.string().max(40).optional(),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8_000),
+      }),
+    )
+    .min(1)
+    .max(40),
+});
+
+type Mensaje = z.infer<typeof PeticionChat>["messages"][number];
 
 function sse(evento: string, datos: unknown): Uint8Array {
   return new TextEncoder().encode(
@@ -69,22 +88,29 @@ function resumirResultado(toolName: string, output: unknown): string {
 }
 
 export async function POST(req: Request) {
-  let body: { cliente_id?: string; messages?: Mensaje[] };
+  let crudo: unknown;
   try {
-    body = await req.json();
+    crudo = await req.json();
   } catch {
     return fail("parametro_invalido", "El body debe ser JSON");
   }
 
-  const messages = body.messages ?? [];
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return fail("parametro_invalido", "messages no puede estar vacío");
+  const parseado = PeticionChat.safeParse(crudo);
+  if (!parseado.success) {
+    const problema = parseado.error.issues[0];
+    return fail(
+      "parametro_invalido",
+      `${problema.path.join(".") || "body"}: ${problema.message}`,
+    );
   }
+  const body = parseado.data;
+  const messages: Mensaje[] = body.messages;
+
   if (!estaConfigurado()) {
     return fail(
       "llm_no_disponible",
       `Falta la API key para AI_PROVIDER=${process.env.AI_PROVIDER ?? "google"}. ` +
-        "Configurarla en .env. El resto de la API funciona sin ella.",
+        "Configurarla en el entorno. El resto de la API funciona sin ella.",
     );
   }
 

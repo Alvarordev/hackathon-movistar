@@ -1,0 +1,40 @@
+# Imagen de producción del Copiloto NBO.
+# El Dockerfile de al lado (`Dockerfile`) es el de desarrollo y corre `next dev`.
+
+# ---------------------------------------------------------------- dependencias
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+# `npm ci` exige el lockfile y lo respeta al pie de la letra: dos builds del
+# mismo commit instalan exactamente lo mismo.
+RUN npm ci
+
+# ---------------------------------------------------------------------- build
+FROM node:24-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+RUN npm run build
+
+# --------------------------------------------------------------------- runner
+FROM node:24-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+# `output: standalone` deja en .next/standalone un servidor autocontenido con
+# solo las dependencias alcanzables. Los estáticos van por fuera y hay que
+# copiarlos a mano.
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
+
+USER node
+EXPOSE 3000
+
+CMD ["node", "server.js"]

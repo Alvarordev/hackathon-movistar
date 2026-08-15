@@ -1,0 +1,5 @@
+# Contexto de build de la imagen de base de datos (db/Dockerfile).
+# Solo necesita deploy/nbo.sql.gz: sin esto el contexto arrastraría los 63 MB
+# de CSV y los artefactos del pipeline en cada build.
+*
+!deploy/nbo.sql.gz

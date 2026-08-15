@@ -1,4 +1,9 @@
+# Cualquier .env real queda fuera; las plantillas *.example sí se versionan.
 .env
+.env.*
+!.env.example
+!.env.prod.example
+
 node_modules/
 .next/
 __pycache__/

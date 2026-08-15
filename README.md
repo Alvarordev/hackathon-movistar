@@ -216,6 +216,67 @@ no es un upsell: `abstenerse: true`, lista de recomendaciones **vacía** y motiv
 explícito. Responde al dolor declarado *"riesgo de ofrecer productos poco
 adecuados"*, y está implementado, no solo mencionado.
 
+## Despliegue
+
+El VPS **solo sirve la app**: nada de Python, LightGBM ni pandas allá. Los datos
+viajan ya calculados dentro de la imagen de la base.
+
+La base completa pesa 867 MB, pero comprime a **25 MB** en
+`deploy/nbo.sql.gz`. Ese archivo se copia a `/docker-entrypoint-initdb.d/` de
+la imagen de Postgres, que lo restaura sola en su primer arranque — sin job de
+seed ni orquestación. En reposo el stack consume **~185 MB de RAM** (64 MB la
+web, 120 MB Postgres).
+
+### Flujo
+
+1. Un push a `main` dispara
+   [publicar-imagenes.yml](.github/workflows/publicar-imagenes.yml), que
+   construye y publica en GHCR `copiloto-nbo-web` (318 MB) y
+   `copiloto-nbo-db` (471 MB).
+2. En Dokploy, una aplicación de tipo **Docker Compose** apuntando a este repo
+   con el archivo `docker-compose.prod.yml`.
+3. Dominio sobre el servicio `web`, puerto 3000, con HTTPS de Let's Encrypt
+   (lo gestiona Traefik).
+4. Variables de entorno en la interfaz de Dokploy — ver
+   [.env.prod.example](.env.prod.example). `POSTGRES_PASSWORD` es obligatoria y
+   **la API key nunca entra al repo**. Si el paquete de GHCR es privado, hay
+   que registrar las credenciales del registry en Dokploy.
+
+### Probar el stack de producción en local
+
+```bash
+mise run build-prod
+docker compose -p nboprod -f docker-compose.prod.yml --env-file .env.prod up -d
+./scripts/verify_contrato.sh http://localhost:3000/api
+```
+
+### Regenerar el dump
+
+`deploy/nbo.sql.gz` está versionado para que el despliegue sea reproducible
+desde un `git clone`. **Queda desfasado si cambias el pipeline**, así que
+después de cualquier cambio hay que regenerarlo y commitearlo:
+
+```bash
+mise run pipeline && mise run dump
+```
+
+### Notas de operación
+
+- **Postgres no publica puerto**: solo se le llega por la red interna del
+  compose. En un VPS, publicarlo sería exponerlo a Internet.
+- **Techos de memoria** de 512 MB por servicio. No es por nuestro consumo —que
+  es de ~185 MB— sino porque el VPS comparte 4 GB con otros proyectos: sin
+  límite, un pico nuestro haría que el OOM killer del kernel matara
+  contenedores ajenos.
+- **Re-sembrar la base**: `initdb.d` solo corre con el volumen vacío. Para
+  recargar datos hay que borrar el volumen `pgdata` y redesplegar.
+- El endpoint del copiloto es **público y sin autenticación**, por decisión de
+  producto. Acota el tamaño y la cantidad de mensajes por request para que un
+  bucle del frontend o un payload gigante no quemen la cuota, pero no limita
+  peticiones por IP. Si durante el evento el consumo se dispara, ese límite se
+  añade en
+  [chat/route.ts](web/src/app/api/copiloto/chat/route.ts).
+
 ## Documentación
 
 | Documento | Qué contiene |

@@ -32,3 +32,19 @@ run = "docker compose exec db psql -U nbo -d nbo"
 [tasks.verify]
 description = "Verifica que la API cumple el contrato"
 run = "./scripts/verify_contrato.sh"
+
+[tasks.dump]
+description = "Regenera deploy/nbo.sql.gz desde la base local (correr tras cambiar el pipeline)"
+run = """
+docker compose exec -T db sh -c \
+  'pg_dump -U nbo -d nbo --no-owner --no-privileges --clean --if-exists | gzip -9' \
+  > deploy/nbo.sql.gz
+ls -la deploy/nbo.sql.gz
+"""
+
+[tasks.build-prod]
+description = "Construye las imágenes de producción en local"
+run = """
+docker build -f web/Dockerfile.prod -t copiloto-nbo-web:local web
+docker build -f db/Dockerfile -t copiloto-nbo-db:local .
+"""
