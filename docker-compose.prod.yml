@@ -49,9 +49,17 @@ services:
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    ports:
-      # Traefik (que gestiona Dokploy) publica el dominio contra este puerto.
-      - "${WEB_PORT:-3000}:3000"
+    # SIN `ports`: no se publica nada al host.
+    #
+    # Traefik llega al contenedor por la red interna de Docker, así que
+    # publicar el puerto no aporta nada y además choca — el 3000 del host lo
+    # ocupa la propia interfaz de Dokploy. Como efecto secundario, la app solo
+    # es accesible por el dominio y no por IP:puerto.
+    expose:
+      - "3000"
+    networks:
+      - default          # para hablar con `db`
+      - dokploy-network  # para que Traefik la encuentre
     depends_on:
       db:
         condition: service_healthy
@@ -73,3 +81,12 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  # La crea Dokploy en el VPS y es donde vive Traefik. `db` NO se conecta acá:
+  # se queda en la red interna, inalcanzable desde fuera.
+  #
+  # Para probar este compose en local hace falta crearla antes (es idempotente):
+  #   docker network create dokploy-network
+  dokploy-network:
+    external: true

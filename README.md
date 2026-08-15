@@ -244,10 +244,15 @@ web, 120 MB Postgres).
 
 ### Probar el stack de producción en local
 
+El servicio `web` no publica puerto —Traefik lo alcanza por `dokploy-network`—
+así que en local hay que crear esa red y consultar desde dentro de ella:
+
 ```bash
+docker network create dokploy-network        # idempotente
 mise run build-prod
 docker compose -p nboprod -f docker-compose.prod.yml --env-file .env.prod up -d
-./scripts/verify_contrato.sh http://localhost:3000/api
+docker run --rm --network dokploy-network curlimages/curl \
+  -s http://nboprod-web-1:3000/api/health
 ```
 
 ### Regenerar el dump
