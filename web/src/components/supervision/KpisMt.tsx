@@ -34,7 +34,7 @@ export function KpisMt({ metrics }: { metrics: Metrics }) {
             sigue habiendo terreno, en vez de dibujar una brecha inexistente. */}
         {p.venta_movil_actual_pct >= p.meta_movil_pct ||
         p.venta_hogar_actual_pct >= p.meta_hogar_pct ? (
-          <p className="mt-3 rounded-md border border-exito-borde bg-exito-suave px-3 py-2 text-[12px] leading-relaxed text-tinta-2">
+          <p className="mt-3 rounded-md border border-exito-borde bg-exito-suave px-3 py-2 text-dato leading-relaxed text-tinta-2">
             En el histórico de estas campañas MT ya supera la meta móvil. El
             terreno que queda no está en convertir mejor a quien ya es
             elegible, sino en <span className="font-semibold">a quién se le
@@ -43,7 +43,7 @@ export function KpisMt({ metrics }: { metrics: Metrics }) {
           </p>
         ) : null}
 
-        <p className="mt-3 border-t border-borde pt-2.5 text-[11px] leading-relaxed text-tinta-3">
+        <p className="mt-3 border-t border-borde pt-2.5 text-etiqueta leading-relaxed text-tinta-3">
           {p.definicion}
         </p>
       </Panel>
@@ -54,10 +54,10 @@ export function KpisMt({ metrics }: { metrics: Metrics }) {
         <p className="text-4xl font-semibold tracking-tight">
           {numero(m.total_alcanzable)}
         </p>
-        <p className="mt-1 text-[13px] leading-relaxed text-tinta-2">
+        <p className="mt-1 text-cuerpo leading-relaxed text-tinta-2">
           clientes, contra los{" "}
           <span className="font-semibold">{numero(m.ya_elegibles)}</span> que
-          marca la columna <code className="text-[12px]">elegible_mt</code>.
+          marca la columna <code className="text-dato">elegible_mt</code>.
           Derivar qué producto le falta a cada uno multiplica el mercado por{" "}
           <span className="font-semibold text-acento">
             {m.multiplicador_vs_columna_cruda}
@@ -95,7 +95,7 @@ export function KpisMt({ metrics }: { metrics: Metrics }) {
         <p className="text-4xl font-semibold tracking-tight text-aviso">
           {numero(c.nunca_ofertados_mt)}
         </p>
-        <p className="mt-1 text-[13px] leading-relaxed text-tinta-2">
+        <p className="mt-1 text-cuerpo leading-relaxed text-tinta-2">
           clientes elegibles a Movistar Total a los que{" "}
           <span className="font-semibold">nunca</span> se les ofreció —{" "}
           {pct(c.pct, 1)} de los {numero(c.clientes_elegibles)} elegibles. Es
@@ -124,7 +124,7 @@ function Medidor({
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-[13px] text-tinta-2">{etiqueta}</span>
+        <span className="text-cuerpo text-tinta-2">{etiqueta}</span>
         <span className="flex items-baseline gap-1.5">
           <span
             className={`tabular text-base font-semibold ${
@@ -133,7 +133,7 @@ function Medidor({
           >
             {pct(valor, 1)}
           </span>
-          <span className="text-[11px] text-tinta-3">
+          <span className="text-etiqueta text-tinta-3">
             meta {pct(meta)}
           </span>
         </span>
@@ -169,7 +169,7 @@ function FilaGap({
 }) {
   return (
     <li>
-      <div className="mb-0.5 flex items-baseline justify-between gap-2 text-[13px]">
+      <div className="mb-0.5 flex items-baseline justify-between gap-2 text-cuerpo">
         <span className="text-tinta-2">{etiqueta}</span>
         <span className="tabular font-medium">{numero(n)}</span>
       </div>

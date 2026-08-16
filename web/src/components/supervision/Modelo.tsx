@@ -22,7 +22,7 @@ export function Modelo({ metrics }: { metrics: Metrics }) {
         Cómo se calcula la recomendación
       </TituloPanel>
 
-      <p className="mb-3 text-[13px] leading-relaxed text-tinta-2">
+      <p className="mb-3 text-cuerpo leading-relaxed text-tinta-2">
         El modelo decide y es auditable; el copiloto explica. Las
         probabilidades salen de un modelo entrenado sobre{" "}
         {numero(a.n_train + a.n_valid + a.n_test)} ofrecimientos reales, con
@@ -30,7 +30,7 @@ export function Modelo({ metrics }: { metrics: Metrics }) {
         nunca vio.
       </p>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-borde pt-3 text-[13px] sm:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-borde pt-3 text-cuerpo sm:grid-cols-4">
         <Metrica
           etiqueta="AUC de prueba"
           valor={a.auc_test.toFixed(3)}
@@ -83,9 +83,9 @@ function Metrica({
 }) {
   return (
     <div>
-      <dt className="text-[11px] text-tinta-3">{etiqueta}</dt>
+      <dt className="text-etiqueta text-tinta-3">{etiqueta}</dt>
       <dd className="text-lg font-semibold tracking-tight">{valor}</dd>
-      <p className="text-[11px] text-tinta-3">{nota}</p>
+      <p className="text-etiqueta text-tinta-3">{nota}</p>
     </div>
   );
 }
@@ -93,8 +93,8 @@ function Metrica({
 function Nota({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="rounded-md border border-borde bg-superficie-2 px-3 py-2">
-      <p className="text-[12px] font-semibold">{titulo}</p>
-      <p className="mt-0.5 text-[12px] leading-relaxed text-tinta-2">
+      <p className="text-dato font-semibold">{titulo}</p>
+      <p className="mt-0.5 text-dato leading-relaxed text-tinta-2">
         {children}
       </p>
     </div>

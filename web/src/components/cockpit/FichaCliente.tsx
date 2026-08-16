@@ -37,7 +37,7 @@ export function FichaCliente({ cliente }: { cliente: Cliente }) {
               <p className="text-sm font-semibold text-alerta">
                 No corresponde venta
               </p>
-              <p className="mt-1 text-[13px] text-tinta-2">
+              <p className="mt-1 text-cuerpo text-tinta-2">
                 {cliente.motivo_alerta}
               </p>
             </div>
@@ -56,15 +56,15 @@ export function FichaCliente({ cliente }: { cliente: Cliente }) {
             <p className="text-sm font-semibold text-acento">
               {cliente.persona.nombre}
             </p>
-            <p className="mt-1 text-[13px] leading-relaxed text-tinta-2">
+            <p className="mt-1 text-cuerpo leading-relaxed text-tinta-2">
               {cliente.persona.descripcion}
             </p>
-            <p className="mt-1.5 text-[11px] text-tinta-3 italic">
+            <p className="mt-1.5 text-etiqueta text-tinta-3 italic">
               Cifras promedio del segmento, no de este cliente.
             </p>
           </>
         ) : (
-          <p className="text-[13px] text-tinta-3">Sin segmento asignado</p>
+          <p className="text-cuerpo text-tinta-3">Sin segmento asignado</p>
         )}
 
         <div className="mt-3 flex flex-wrap gap-1">
@@ -87,7 +87,7 @@ export function FichaCliente({ cliente }: { cliente: Cliente }) {
         </p>
 
         {extra > 0.5 ? (
-          <p className="mt-1.5 text-[13px] leading-relaxed text-tinta-2">
+          <p className="mt-1.5 text-cuerpo leading-relaxed text-tinta-2">
             En pantalla su facturación figura como{" "}
             <span className="tabular font-medium">
               {soles(cliente.monto_facturado_prom)}

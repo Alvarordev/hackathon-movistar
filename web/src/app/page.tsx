@@ -38,13 +38,13 @@ export default async function ColaPage({ searchParams }: Props) {
           <h1 className="text-lg font-semibold tracking-tight">
             Cola de atención
           </h1>
-          <p className="mt-0.5 text-[13px] text-tinta-2">
+          <p className="mt-0.5 text-cuerpo text-tinta-2">
             Clientes ordenados por valor esperado de la mejor oportunidad.
             Quienes tienen alerta de retención no aparecen acá.
           </p>
         </div>
         {datos ? (
-          <p className="tabular text-[13px] text-tinta-3">
+          <p className="tabular text-cuerpo text-tinta-3">
             {numero(datos.n)} clientes priorizados
           </p>
         ) : null}

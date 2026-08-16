@@ -18,7 +18,7 @@ export function RutaMt({ ruta }: { ruta: TipoRutaMt }) {
         Ruta a Movistar Total
       </TituloPanel>
 
-      <p className="mb-3 text-[13px] leading-relaxed text-tinta-2">
+      <p className="mb-3 text-cuerpo leading-relaxed text-tinta-2">
         {ruta.descripcion}
       </p>
 
@@ -45,7 +45,7 @@ export function RutaMt({ ruta }: { ruta: TipoRutaMt }) {
         />
       </div>
 
-      <p className="mt-3 border-t border-acento-borde pt-2.5 text-[12px] leading-relaxed text-tinta-2">
+      <p className="mt-3 border-t border-acento-borde pt-2.5 text-dato leading-relaxed text-tinta-2">
         El paso 1 por sí solo sube la factura. El argumento es la ruta completa:
         al cerrarla, el cliente pasa a pagar{" "}
         <span className="tabular font-semibold text-tinta">
@@ -85,15 +85,15 @@ function Paso({
       <div className="mb-1.5 flex items-center gap-1.5">
         <Badge tono={destacado ? "acento" : "neutro"}>Paso {numero}</Badge>
         {destacado ? (
-          <span className="text-[11px] text-tinta-3">ofrecer ahora</span>
+          <span className="text-etiqueta text-tinta-3">ofrecer ahora</span>
         ) : null}
       </div>
-      <p className="text-[13px] font-semibold">{titulo}</p>
-      <p className="tabular mt-0.5 text-[13px] text-tinta-2">
+      <p className="text-cuerpo font-semibold">{titulo}</p>
+      <p className="tabular mt-0.5 text-cuerpo text-tinta-2">
         {soles(precio)} al mes
       </p>
       <p
-        className={`tabular mt-1 text-[12px] ${
+        className={`tabular mt-1 text-dato ${
           pieExito ? "font-medium text-exito" : "text-tinta-3"
         }`}
       >

@@ -32,7 +32,7 @@ export default async function CockpitPage({ params }: Props) {
           <div className="text-center">
             <Link
               href="/"
-              className="text-[13px] font-medium text-acento hover:underline"
+              className="text-cuerpo font-medium text-acento hover:underline"
             >
               Volver a la cola
             </Link>

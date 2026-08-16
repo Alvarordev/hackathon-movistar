@@ -37,7 +37,7 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
           <h2 className="mt-1.5 text-xl font-semibold tracking-tight">
             {rec.nombre_oferta}
           </h2>
-          <p className="tabular mt-0.5 text-[13px] text-tinta-2">
+          <p className="tabular mt-0.5 text-cuerpo text-tinta-2">
             {soles(rec.precio_mensual)} al mes
             {rec.gb_incluidos ? ` · ${rec.gb_incluidos} GB` : ""}
           </p>
@@ -47,25 +47,25 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
             el tamaño más grande de la pantalla. */}
         {ahorra ? (
           <div className="text-right">
-            <p className="text-[11px] text-tinta-3">Ahorra al mes</p>
+            <p className="text-etiqueta text-tinta-3">Ahorra al mes</p>
             {/* Figuras proporcionales: tabular-nums en una cifra grande
                 suelta la deja suelta y desalineada. */}
             <p className="text-3xl font-semibold tracking-tight text-exito">
               {soles(rec.ahorro_soles)}
             </p>
             {rec.ahorro_pct_real ? (
-              <p className="text-[11px] text-tinta-3">
+              <p className="text-etiqueta text-tinta-3">
                 {pct(rec.ahorro_pct_real)} menos que hoy
               </p>
             ) : null}
           </div>
         ) : cuesta ? (
           <div className="text-right">
-            <p className="text-[11px] text-tinta-3">Costo adicional</p>
+            <p className="text-etiqueta text-tinta-3">Costo adicional</p>
             <p className="text-2xl font-semibold tracking-tight text-tinta-2">
               +{soles(rec.ahorro_soles)}
             </p>
-            <p className="text-[11px] text-tinta-3">al mes</p>
+            <p className="text-etiqueta text-tinta-3">al mes</p>
           </div>
         ) : null}
       </header>
@@ -85,7 +85,7 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
           <div className="flex items-start gap-2 border-t border-borde pt-3">
             <Radio size={14} className="mt-0.5 shrink-0 text-tinta-3" />
             <div className="min-w-0">
-              <p className="text-[13px] font-medium">{rec.canal_sugerido}</p>
+              <p className="text-cuerpo font-medium">{rec.canal_sugerido}</p>
               {etiquetaOrigen(rec.canal_origen) ? (
                 <Origen>{etiquetaOrigen(rec.canal_origen)}</Origen>
               ) : null}
@@ -94,7 +94,7 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
 
           {rec.momento_sugerido ? (
             <div className="rounded-md border border-aviso-borde bg-aviso-suave px-2.5 py-2">
-              <p className="text-[12px] leading-relaxed text-tinta-2">
+              <p className="text-dato leading-relaxed text-tinta-2">
                 {rec.momento_sugerido}
               </p>
             </div>
@@ -108,7 +108,7 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
         <div className="flex flex-col gap-3">
           {aFavor.length > 0 ? (
             <div>
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-tinta-3 uppercase">
+              <p className="mb-2 flex items-center gap-1.5 text-etiqueta font-semibold tracking-wider text-tinta-3 uppercase">
                 <TrendingUp size={12} />
                 Juega a favor
               </p>
@@ -116,7 +116,7 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
                 {aFavor.map((d) => (
                   <li
                     key={d.feature}
-                    className="flex gap-2 text-[13px] leading-snug"
+                    className="flex gap-2 text-cuerpo leading-snug"
                   >
                     <span
                       aria-hidden
@@ -131,7 +131,7 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
 
           {enContra.length > 0 ? (
             <div>
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-tinta-3 uppercase">
+              <p className="mb-2 flex items-center gap-1.5 text-etiqueta font-semibold tracking-wider text-tinta-3 uppercase">
                 <TrendingDown size={12} />
                 Juega en contra
               </p>
@@ -139,7 +139,7 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
                 {enContra.map((d) => (
                   <li
                     key={d.feature}
-                    className="flex gap-2 text-[13px] leading-snug"
+                    className="flex gap-2 text-cuerpo leading-snug"
                   >
                     <span
                       aria-hidden

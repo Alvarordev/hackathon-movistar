@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, Layers, Shield } from "lucide-react";
 
 import { Badge, Panel, TituloPanel } from "@/components/ui/Base";
+import { Button } from "@/components/ui/Button";
 import { pct, soles } from "@/lib/api";
 import type { Recomendacion } from "@/lib/tipos";
 
@@ -44,34 +45,34 @@ export function Alternativas({
                 aria-expanded={abierto}
                 className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-superficie-2"
               >
-                <span className="tabular w-5 shrink-0 text-[13px] text-tinta-3">
+                <span className="tabular w-5 shrink-0 text-cuerpo text-tinta-3">
                   {rec.rank}
                 </span>
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <span className="truncate text-[13px] font-medium">
+                    <span className="truncate text-cuerpo font-medium">
                       {rec.nombre_oferta}
                     </span>
                     {rec.avanza_a_mt ? (
                       <Shield size={11} className="shrink-0 text-acento" />
                     ) : null}
                   </span>
-                  <span className="tabular block text-[11px] text-tinta-3">
+                  <span className="tabular block text-etiqueta text-tinta-3">
                     {soles(rec.precio_mensual)} al mes
                   </span>
                 </span>
 
-                <span className="tabular shrink-0 text-right text-[13px]">
+                <span className="tabular shrink-0 text-right text-cuerpo">
                   <span className="block font-semibold">
                     {pct(rec.prob_aceptacion)}
                   </span>
-                  <span className="block text-[11px] text-tinta-3">
+                  <span className="block text-etiqueta text-tinta-3">
                     aceptación
                   </span>
                 </span>
 
-                <span className="tabular w-20 shrink-0 text-right text-[13px]">
+                <span className="tabular w-20 shrink-0 text-right text-cuerpo">
                   {rec.ahorro_soles === null ? (
                     <span className="text-tinta-3">—</span>
                   ) : rec.ahorro_soles > 0 ? (
@@ -100,7 +101,7 @@ export function Alternativas({
                       {rec.drivers.map((d) => (
                         <li
                           key={d.feature}
-                          className="flex gap-2 text-[12px] text-tinta-2"
+                          className="flex gap-2 text-dato text-tinta-2"
                         >
                           <span
                             aria-hidden
@@ -112,7 +113,7 @@ export function Alternativas({
                     </ul>
                   ) : null}
 
-                  <p className="mb-1.5 text-[11px] font-semibold tracking-wider text-tinta-3 uppercase">
+                  <p className="mb-1.5 text-etiqueta font-semibold tracking-wider text-tinta-3 uppercase">
                     Por canal
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -126,17 +127,18 @@ export function Alternativas({
                     ))}
                   </div>
 
-                  <button
-                    type="button"
+                  <Button
+                    variante="outline"
+                    tam="sm"
+                    className="mt-3"
                     onClick={() =>
                       onPreguntar(
                         `¿Por qué me recomiendas la #1 y no ${rec.nombre_oferta}?`,
                       )
                     }
-                    className="mt-3 rounded-md border border-borde bg-superficie px-2.5 py-1.5 text-[12px] font-medium text-tinta-2 hover:bg-superficie-2"
                   >
                     Preguntar por qué no es la #1
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </li>

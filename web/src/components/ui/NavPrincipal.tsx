@@ -25,10 +25,10 @@ export function NavPrincipal() {
             key={href}
             href={href}
             aria-current={activo ? "page" : undefined}
-            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-cuerpo font-medium transition-colors duration-150 ease-fuerte outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
               activo
-                ? "bg-acento-suave text-acento"
-                : "text-tinta-2 hover:bg-superficie-2"
+                ? "bg-white/12 text-white"
+                : "text-white/60 hover:bg-white/8 hover:text-white/90"
             }`}
           >
             <Icono size={14} />

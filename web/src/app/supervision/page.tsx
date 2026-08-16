@@ -41,7 +41,7 @@ export default async function SupervisionPage() {
       <div className="mx-auto flex max-w-[1400px] flex-col gap-4 p-4">
         <header>
           <h1 className="text-lg font-semibold tracking-tight">Supervisión</h1>
-          <p className="mt-0.5 max-w-3xl text-[13px] leading-relaxed text-tinta-2">
+          <p className="mt-0.5 max-w-3xl text-cuerpo leading-relaxed text-tinta-2">
             Seguimiento de extremo a extremo del ofrecimiento y avance sobre los
             indicadores de Movistar Total.
           </p>

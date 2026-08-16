@@ -24,7 +24,7 @@ export function Badge({
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${TONO_BADGE[tono]}`}
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-etiqueta font-medium whitespace-nowrap ${TONO_BADGE[tono]}`}
     >
       {icono}
       {children}
@@ -43,7 +43,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`rounded-panel border border-borde bg-superficie ${
+      className={`rounded-panel border border-borde bg-superficie shadow-panel ${
         padding ? "p-4" : ""
       } ${className}`}
     >
@@ -63,7 +63,7 @@ export function TituloPanel({
 }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-2">
-      <h2 className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-tinta-3 uppercase">
+      <h2 className="flex items-center gap-1.5 text-etiqueta font-semibold tracking-wider text-tinta-3 uppercase">
         {icono}
         {children}
       </h2>
@@ -92,7 +92,7 @@ export function Dato({
         : "text-tinta";
   return (
     <div className="min-w-0">
-      <dt className="truncate text-[11px] text-tinta-3">{etiqueta}</dt>
+      <dt className="truncate text-etiqueta text-tinta-3">{etiqueta}</dt>
       <dd className={`tabular truncate text-sm font-semibold ${color}`}>
         {valor}
         {sufijo ? (
@@ -123,7 +123,7 @@ export function BarraProb({
     <div>
       {etiqueta ? (
         <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-[11px] text-tinta-3">{etiqueta}</span>
+          <span className="text-etiqueta text-tinta-3">{etiqueta}</span>
           <span className="tabular text-sm font-semibold">{pct}%</span>
         </div>
       ) : null}
@@ -167,6 +167,6 @@ export function Vacio({
  *  proyecto mostrarlo, no esconderlo. */
 export function Origen({ children }: { children: ReactNode }) {
   return (
-    <span className="text-[11px] text-tinta-3 italic">{children}</span>
+    <span className="text-etiqueta text-tinta-3 italic">{children}</span>
   );
 }

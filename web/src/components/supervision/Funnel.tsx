@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Filter, Table2 } from "lucide-react";
 
 import { Panel, TituloPanel } from "@/components/ui/Base";
+import { Button, Segmentado } from "@/components/ui/Button";
 import { numero, pct } from "@/lib/api";
 import { CANALES, type Canal, type Funnel as TipoFunnel } from "@/lib/tipos";
 
@@ -19,7 +20,12 @@ import { CANALES, type Canal, type Funnel as TipoFunnel } from "@/lib/tipos";
  * claro contra la superficie). Cada barra va con su etiqueta directa: el
  * tooltip nunca es la única forma de leer un valor.
  */
-const RAMPA_ETAPAS = ["#8f9fea", "#6e7fe3", "#4e5ad7", "#383eaa"];
+const RAMPA_ETAPAS = [
+  "var(--color-rampa-1)",
+  "var(--color-rampa-2)",
+  "var(--color-rampa-3)",
+  "var(--color-rampa-4)",
+];
 
 const ETIQUETA_ETAPA: Record<string, string> = {
   ofrecimientos: "Ofrecimientos registrados",
@@ -57,50 +63,49 @@ export function Funnel({
       <TituloPanel
         icono={<Filter size={12} />}
         accion={
-          <button
-            type="button"
+          <Button
+            variante="ghost"
+            tam="sm"
             onClick={() => setTabla((v) => !v)}
             aria-pressed={tabla}
-            className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-tinta-3 hover:bg-superficie-2 hover:text-tinta-2"
+            className="text-tinta-3"
           >
             <Table2 size={12} />
             {tabla ? "Ver gráfico" : "Ver tabla"}
-          </button>
+          </Button>
         }
       >
         Trazabilidad del ofrecimiento
       </TituloPanel>
 
       {/* Un solo filtro arriba, que alcanza a todo lo que está debajo. */}
-      <div className="mb-4 flex flex-wrap items-center gap-1 rounded-md border border-borde bg-superficie p-0.5">
-        <BotonFiltro activo={canal === null} onClick={() => cambiarCanal(null)}>
-          Todos los canales
-        </BotonFiltro>
-        {CANALES.map((c) => (
-          <BotonFiltro
-            key={c}
-            activo={canal === c}
-            onClick={() => cambiarCanal(c)}
-          >
-            {c}
-          </BotonFiltro>
-        ))}
+      <div className="mb-4 flex">
+        <Segmentado
+          etiquetaGrupo="Canal"
+          tam="sm"
+          valor={canal ?? "todos"}
+          onCambiar={(v) => cambiarCanal(v === "todos" ? null : (v as Canal))}
+          opciones={[
+            { valor: "todos", etiqueta: "Todos los canales" },
+            ...CANALES.map((c) => ({ valor: c as string, etiqueta: c })),
+          ]}
+        />
       </div>
 
       {/* Al refrescar se mantiene el render anterior atenuado: un esqueleto
           haría saltar el layout en cada cambio de filtro. */}
       <div className={refrescando ? "opacity-60 transition-opacity" : ""}>
         {tabla ? (
-          <table className="w-full text-[13px]">
+          <table className="w-full text-cuerpo">
             <thead>
               <tr className="border-b border-borde text-left">
-                <th className="py-1.5 text-[11px] font-semibold text-tinta-3 uppercase">
+                <th className="py-1.5 text-etiqueta font-semibold text-tinta-3 uppercase">
                   Etapa
                 </th>
-                <th className="py-1.5 text-right text-[11px] font-semibold text-tinta-3 uppercase">
+                <th className="py-1.5 text-right text-etiqueta font-semibold text-tinta-3 uppercase">
                   Eventos
                 </th>
-                <th className="py-1.5 text-right text-[11px] font-semibold text-tinta-3 uppercase">
+                <th className="py-1.5 text-right text-etiqueta font-semibold text-tinta-3 uppercase">
                   Del anterior
                 </th>
               </tr>
@@ -122,15 +127,15 @@ export function Funnel({
             {datos.etapas.map((e, i) => (
               <li key={e.etapa}>
                 <div className="mb-1 flex items-baseline justify-between gap-3">
-                  <span className="text-[13px] text-tinta-2">
+                  <span className="text-cuerpo text-tinta-2">
                     {ETIQUETA_ETAPA[e.etapa] ?? e.etapa}
                   </span>
                   <span className="flex items-baseline gap-2">
-                    <span className="tabular text-[13px] font-semibold">
+                    <span className="tabular text-cuerpo font-semibold">
                       {numero(e.n)}
                     </span>
                     {e.pct_del_anterior !== null ? (
-                      <span className="tabular w-12 text-right text-[11px] text-tinta-3">
+                      <span className="tabular w-12 text-right text-etiqueta text-tinta-3">
                         {pct(e.pct_del_anterior, 1)}
                       </span>
                     ) : (
@@ -159,14 +164,14 @@ export function Funnel({
 
       <div className="mt-4 grid gap-3 border-t border-borde pt-3 sm:grid-cols-2">
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold tracking-wider text-tinta-3 uppercase">
+          <p className="mb-1.5 text-etiqueta font-semibold tracking-wider text-tinta-3 uppercase">
             Medios probatorios
           </p>
           <ul className="flex flex-col gap-1">
             {Object.entries(datos.medios_probatorios).map(([k, v]) => (
               <li
                 key={k}
-                className="flex items-baseline justify-between text-[13px]"
+                className="flex items-baseline justify-between text-cuerpo"
               >
                 <span className="text-tinta-2">
                   {k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
@@ -178,10 +183,10 @@ export function Funnel({
         </div>
 
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold tracking-wider text-tinta-3 uppercase">
+          <p className="mb-1.5 text-etiqueta font-semibold tracking-wider text-tinta-3 uppercase">
             Movistar Total
           </p>
-          <ul className="flex flex-col gap-1 text-[13px]">
+          <ul className="flex flex-col gap-1 text-cuerpo">
             <li className="flex items-baseline justify-between">
               <span className="text-tinta-2">Ofrecimientos con MT</span>
               <span className="tabular font-medium">
@@ -207,27 +212,3 @@ export function Funnel({
   );
 }
 
-function BotonFiltro({
-  activo,
-  onClick,
-  children,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={activo}
-      className={`rounded px-2 py-1 text-[12px] font-medium transition-colors ${
-        activo
-          ? "bg-acento-suave text-acento"
-          : "text-tinta-2 hover:bg-superficie-2"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

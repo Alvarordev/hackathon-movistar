@@ -68,7 +68,7 @@ export function Timeline({ journey }: { journey: Journey }) {
           </div>
 
           {resumen.motivo_rechazo_dominante ? (
-            <p className="mb-3 rounded-md border border-aviso-borde bg-aviso-suave px-2.5 py-1.5 text-[12px] text-tinta-2">
+            <p className="mb-3 rounded-md border border-aviso-borde bg-aviso-suave px-2.5 py-1.5 text-dato text-tinta-2">
               Cuando rechaza, suele ser por:{" "}
               <span className="font-semibold">
                 {etiquetaMotivo(resumen.motivo_rechazo_dominante)}
@@ -105,15 +105,15 @@ export function Timeline({ journey }: { journey: Journey }) {
                   </span>
 
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[13px] font-medium">
+                    <span className="text-cuerpo font-medium">
                       {e.nombre_oferta}
                     </span>
-                    <span className="shrink-0 text-[11px] text-tinta-3">
+                    <span className="shrink-0 text-etiqueta text-tinta-3">
                       {fecha(e.fecha)}
                     </span>
                   </div>
 
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-tinta-3">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-etiqueta text-tinta-3">
                     <span>{e.canal}</span>
                     {e.oferta_es_mt ? (
                       <Badge tono="acento">MT</Badge>

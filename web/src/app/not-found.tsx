@@ -15,7 +15,7 @@ export default function NoEncontrado() {
         <div className="text-center">
           <Link
             href="/"
-            className="text-[13px] font-medium text-acento hover:underline"
+            className="text-cuerpo font-medium text-acento hover:underline"
           >
             Volver a la cola de atención
           </Link>

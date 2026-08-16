@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Loader2, Search } from "lucide-react";
 
+import { Button, Segmentado } from "@/components/ui/Button";
 import { CANALES } from "@/lib/tipos";
 
 interface Props {
@@ -34,44 +35,36 @@ export function FiltrosCola({ foco, canal, soloNunca }: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Grupo etiqueta="Foco">
-        <Opcion activo={foco === "mt"} onClick={() => aplicar({ foco: "mt" })}>
-          Blindaje MT
-        </Opcion>
-        <Opcion
-          activo={foco === "todos"}
-          onClick={() => aplicar({ foco: "todos" })}
-        >
-          Todo el portafolio
-        </Opcion>
-      </Grupo>
+      <Segmentado
+        etiqueta="Foco"
+        valor={foco === "todos" ? "todos" : "mt"}
+        onCambiar={(v) => aplicar({ foco: v })}
+        opciones={[
+          { valor: "mt", etiqueta: "Blindaje MT" },
+          { valor: "todos", etiqueta: "Todo el portafolio" },
+        ]}
+      />
 
-      <Grupo etiqueta="Canal">
-        <Opcion activo={!canal} onClick={() => aplicar({ canal: undefined })}>
-          Todos
-        </Opcion>
-        {CANALES.map((c) => (
-          <Opcion key={c} activo={canal === c} onClick={() => aplicar({ canal: c })}>
-            {c}
-          </Opcion>
-        ))}
-      </Grupo>
+      <Segmentado
+        etiqueta="Canal"
+        valor={canal ?? "todos"}
+        onCambiar={(v) => aplicar({ canal: v === "todos" ? undefined : v })}
+        opciones={[
+          { valor: "todos", etiqueta: "Todos" },
+          ...CANALES.map((c) => ({ valor: c as string, etiqueta: c })),
+        ]}
+      />
 
-      <button
-        type="button"
+      <Button
+        variante={soloNunca ? "primario" : "outline"}
         onClick={() =>
           aplicar({ solo_nunca_ofertados: soloNunca ? undefined : "true" })
         }
         aria-pressed={soloNunca}
-        className={`rounded-md border px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-          soloNunca
-            ? "border-acento-borde bg-acento-suave text-acento"
-            : "border-borde bg-superficie text-tinta-2 hover:bg-superficie-2"
-        }`}
         title="Clientes elegibles a los que nunca se les ofreció Movistar Total"
       >
         Nunca se le ofreció MT
-      </button>
+      </Button>
 
       {pendiente ? (
         <Loader2 size={15} className="animate-spin text-tinta-3" />
@@ -87,51 +80,10 @@ export function FiltrosCola({ foco, canal, soloNunca }: Props) {
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar cliente (CLI000013)"
           aria-label="Buscar cliente por identificador"
-          className="w-56 rounded-md border border-borde bg-superficie py-1.5 pr-2.5 pl-8 text-[13px] outline-none placeholder:text-tinta-3 focus:border-acento-borde focus:ring-2 focus:ring-acento-suave"
+          className="w-56 rounded-md border border-borde bg-superficie py-1.5 pr-2.5 pl-8 text-cuerpo outline-none placeholder:text-tinta-3 focus:border-acento-borde focus:ring-2 focus:ring-acento-suave"
         />
       </form>
     </div>
   );
 }
 
-function Grupo({
-  etiqueta,
-  children,
-}: {
-  etiqueta: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-1 rounded-md border border-borde bg-superficie p-0.5">
-      <span className="px-1.5 text-[11px] font-medium text-tinta-3">
-        {etiqueta}
-      </span>
-      {children}
-    </div>
-  );
-}
-
-function Opcion({
-  activo,
-  onClick,
-  children,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={activo}
-      className={`rounded px-2 py-1 text-[13px] font-medium transition-colors ${
-        activo
-          ? "bg-acento-suave text-acento"
-          : "text-tinta-2 hover:bg-superficie-2"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

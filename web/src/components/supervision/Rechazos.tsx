@@ -25,14 +25,14 @@ export function Rechazos({ funnel }: { funnel: Funnel }) {
         {entradas.map(([motivo, n]) => (
           <li key={motivo}>
             <div className="mb-1 flex items-baseline justify-between gap-3">
-              <span className="text-[13px] text-tinta-2">
+              <span className="text-cuerpo text-tinta-2">
                 {etiquetaMotivo(motivo)}
               </span>
               <span className="flex items-baseline gap-2">
-                <span className="tabular text-[13px] font-medium">
+                <span className="tabular text-cuerpo font-medium">
                   {numero(n)}
                 </span>
-                <span className="tabular w-10 text-right text-[11px] text-tinta-3">
+                <span className="tabular w-10 text-right text-etiqueta text-tinta-3">
                   {pct(n / total, 1)}
                 </span>
               </span>
@@ -51,7 +51,7 @@ export function Rechazos({ funnel }: { funnel: Funnel }) {
         ))}
       </ul>
 
-      <p className="mt-3 border-t border-borde pt-2.5 text-[12px] leading-relaxed text-tinta-3">
+      <p className="mt-3 border-t border-borde pt-2.5 text-dato leading-relaxed text-tinta-3">
         El precio domina, pero en el historial bajar el precio recupera menos
         que pivotar a Movistar Total. La matriz de rebate del cockpit muestra la
         palanca que corresponde a cada motivo.

@@ -16,7 +16,7 @@ import type { ClientePrioridad } from "@/lib/tipos";
 export function TablaCola({ clientes }: { clientes: ClientePrioridad[] }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto scroll-fino rounded-panel border border-borde bg-superficie">
-      <table className="w-full border-collapse text-[13px]">
+      <table className="w-full border-collapse text-cuerpo">
         <thead className="sticky top-0 z-10 bg-superficie-2 text-left">
           <tr className="border-b border-borde">
             <Th className="w-8 text-center">#</Th>
@@ -55,7 +55,7 @@ export function TablaCola({ clientes }: { clientes: ClientePrioridad[] }) {
 
               <Td>
                 <div className="text-tinta-2">{c.persona ?? "—"}</div>
-                <div className="mt-0.5 text-[11px] text-tinta-3">
+                <div className="mt-0.5 text-etiqueta text-tinta-3">
                   {etiquetaGap(c.gap_a_mt)}
                 </div>
               </Td>
@@ -74,7 +74,7 @@ export function TablaCola({ clientes }: { clientes: ClientePrioridad[] }) {
                   ) : null}
                 </div>
                 {c.tiene_ruta_mt ? (
-                  <div className="mt-1 flex items-center gap-1 text-[11px] text-tinta-3">
+                  <div className="mt-1 flex items-center gap-1 text-etiqueta text-tinta-3">
                     <Route size={11} />
                     Paso 1 de la ruta a MT
                     {c.ahorro_soles_proyectado !== null ? (
@@ -130,7 +130,7 @@ function Th({
 }) {
   return (
     <th
-      className={`px-3 py-2 text-[11px] font-semibold tracking-wider text-tinta-3 uppercase ${className}`}
+      className={`px-3 py-2 text-etiqueta font-semibold tracking-wider text-tinta-3 uppercase ${className}`}
     >
       {children}
     </th>
