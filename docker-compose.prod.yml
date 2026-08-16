@@ -19,6 +19,11 @@ name: copiloto-nbo
 services:
   db:
     image: ${IMAGE_DB:-ghcr.io/alvarordev/copiloto-nbo-db}:${IMAGE_TAG:-latest}
+    # Sin esto, un `up -d` reusa la imagen que ya tiene en disco y `latest`
+    # nunca se mueve: Docker solo baja una imagen cuando le falta, no cuando
+    # cambió en el registry. Un redeploy parecía funcionar —terminaba en 0s— y
+    # seguía sirviendo la versión anterior.
+    pull_policy: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nbo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
@@ -41,6 +46,7 @@ services:
 
   web:
     image: ${IMAGE_WEB:-ghcr.io/alvarordev/copiloto-nbo-web}:${IMAGE_TAG:-latest}
+    pull_policy: always
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-nbo}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nbo}
       NODE_ENV: production

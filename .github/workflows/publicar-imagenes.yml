@@ -71,3 +71,28 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.nombre }}
           cache-to: type=gha,mode=max,scope=${{ matrix.nombre }}
+
+  # El despliegue lo dispara ESTE workflow, no el push.
+  #
+  # Dokploy también puede escuchar el push de git, pero entonces redespliega
+  # mientras las imágenes todavía se están construyendo: el build tarda ~2
+  # minutos y el deploy llegaba veinte segundos antes de que `latest` existiera,
+  # así que publicaba la versión anterior y se quedaba ahí. Si el auto-deploy
+  # por git sigue activo en el panel, conviene apagarlo: este job lo reemplaza.
+  desplegar:
+    needs: publicar
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Avisar a Dokploy
+        env:
+          WEBHOOK: ${{ secrets.DOKPLOY_WEBHOOK }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "Falta el secret DOKPLOY_WEBHOOK: no se despliega."
+            echo "Se toma de Dokploy > la aplicación > Deployments > Webhook URL."
+            exit 1
+          fi
+          codigo=$(curl -sS -o /tmp/respuesta -w '%{http_code}' -X POST "$WEBHOOK")
+          echo "HTTP $codigo"; cat /tmp/respuesta; echo
+          [ "$codigo" -lt 400 ]
