@@ -206,6 +206,87 @@ export interface Prioridades {
   clientes: ClientePrioridad[];
 }
 
+export interface FiltrosSegmento {
+  edad_rango?: string;
+  departamento?: string;
+  tipo_cliente?: "postpago" | "prepago";
+  cluster_id?: number;
+  gap_a_mt?: GapMt;
+  salud_cliente?: "buena" | "observada" | "critica";
+  canal_mas_usado?: Canal;
+  elegible_mt?: boolean;
+  es_movistar_total?: boolean;
+  es_usuario_app?: boolean;
+}
+
+/** Devuelto cuando ningún cliente cumple los filtros: sin bloques que promediar. */
+export interface SegmentoVacio {
+  filtros_aplicados: FiltrosSegmento;
+  n_clientes: 0;
+  pct_de_la_base: number;
+  confianza: "baja";
+  nota: string;
+}
+
+export interface AnalisisSegmento {
+  filtros_aplicados: FiltrosSegmento;
+  n_clientes: number;
+  pct_de_la_base: number;
+  confianza: "alta" | "baja";
+  perfil: {
+    antiguedad_meses_prom: number;
+    gasto_actual_total_prom: number;
+    consumo_datos_gb_prom: number;
+    dias_mora_prom: number;
+    n_postpago: number;
+    n_prepago: number;
+    n_sin_movil: number;
+    n_usuarios_app: number;
+    pct_usuarios_app: number;
+  };
+  movistar_total: {
+    n_elegibles: number;
+    pct_elegibles: number;
+    n_ya_mt: number;
+    pct_ya_mt: number;
+    n_elegibles_nunca_ofertados: number;
+    desglose_gap: Array<{ gap: GapMt; n: number; pct: number }>;
+  };
+  salud: {
+    n_buena: number;
+    n_observada: number;
+    n_critica: number;
+    n_abstencion: number;
+    pct_abstencion: number;
+  };
+  personas: Array<{
+    cluster_id: number;
+    persona: string;
+    n: number;
+    pct: number;
+  }>;
+  /** Proyección del modelo: qué recomendaría hoy, no lo que ya pasó. */
+  oportunidad: Array<{
+    oferta_id: string;
+    nombre_oferta: string;
+    es_movistar_total: boolean;
+    n_clientes: number;
+    pct: number;
+    valor_esperado_prom: number;
+    ahorro_soles_prom: number | null;
+  }>;
+  /** Medida sobre el historial real. Tasa null = nunca se le ofreció nada. */
+  conversion_historica: {
+    n_ofrecimientos: number;
+    n_aceptadas: number;
+    tasa: number | null;
+    n_ofrecimientos_mt: number;
+    n_aceptadas_mt: number;
+    tasa_mt: number | null;
+  };
+  nota_metodologica: string;
+}
+
 export interface EtapaFunnel {
   etapa: string;
   n: number;

@@ -131,5 +131,6 @@ export const NOMBRE_TOOL: Record<string, string> = {
   get_ruta_mt: "Ruta a Movistar Total",
   evaluar_oferta: "Evaluación de oferta",
   proximos_clientes: "Cola de prioridades",
+  analizar_segmento: "Análisis de segmento",
   listar_ofertas: "Catálogo",
 };

@@ -20,6 +20,50 @@ export const MOTIVOS = [
 export const CANALES = ["Tienda", "Call In", "Call Out", "Digital"] as const;
 export type Canal = (typeof CANALES)[number];
 
+/**
+ * Valores admitidos de las columnas categóricas, verificados contra la base.
+ *
+ * Sirven a la vez de `z.enum` en los tools —para que el LLM no pueda pedir un
+ * segmento que no existe, como "26-35 años"— y de validación en los endpoints
+ * REST. Un filtro mal escrito devolvería cero clientes en silencio, que es la
+ * peor forma de equivocarse: parece un dato.
+ */
+export const EDAD_RANGOS = [
+  "18-25",
+  "26-35",
+  "36-45",
+  "46-55",
+  "56-65",
+  "65+",
+] as const;
+
+export const DEPARTAMENTOS = [
+  "Lima",
+  "Arequipa",
+  "La Libertad",
+  "Piura",
+  "Lambayeque",
+  "Cusco",
+  "Junin",
+  "Ica",
+  "Otro",
+] as const;
+
+export const TIPOS_CLIENTE = ["postpago", "prepago"] as const;
+
+export const GAPS_MT = [
+  "ninguno",
+  "producto_hogar",
+  "internet_hogar",
+  "migracion_postpago",
+  "no_alcanzable",
+  "ya_es_mt",
+] as const;
+
+export const SALUD = ["buena", "observada", "critica"] as const;
+
+export const CLUSTER_IDS = [0, 1, 2, 3, 4, 5] as const;
+
 export interface Driver {
   feature: string;
   valor: number | string | boolean;
@@ -341,6 +385,238 @@ export async function getPrioridades(opts: {
     solo_nunca_ofertados: Boolean(opts.soloNuncaOfertados),
     n: filas.length,
     clientes: filas,
+  };
+}
+
+// -------------------------------------------------- análisis de segmento
+
+export interface FiltrosSegmento {
+  edad_rango?: string;
+  departamento?: string;
+  tipo_cliente?: string;
+  cluster_id?: number;
+  gap_a_mt?: string;
+  salud_cliente?: string;
+  canal_mas_usado?: string;
+  elegible_mt?: boolean;
+  es_movistar_total?: boolean;
+  es_usuario_app?: boolean;
+}
+
+/** Fracción con 4 decimales. Devolver n y pct juntos evita que el LLM divida. */
+const pct = (n: number, total: number) =>
+  total === 0 ? 0 : Number((n / total).toFixed(4));
+
+/**
+ * Igual, pero null cuando no hay denominador.
+ *
+ * Una tasa sobre cero ofrecimientos no es 0%: es "nunca se midió". Devolver 0
+ * haría que el copiloto dijera "convierte 0%" de un segmento al que jamás se le
+ * ofreció nada, que es lo contrario de lo que pasa.
+ */
+const tasa = (n: number, total: number) =>
+  total === 0 ? null : Number((n / total).toFixed(4));
+
+/**
+ * Estadísticas de un grupo de clientes.
+ *
+ * El resto del motor mira un cliente a la vez, que es lo correcto para armar un
+ * argumento. Pero el asesor también pregunta por el colectivo —"¿y los clientes
+ * de este rango de edad?"—, y sin esto el copiloto sólo puede responder "no
+ * tengo ese dato" sobre datos que sí están en la base.
+ *
+ * Sin filtros devuelve la planta entera. Cada bloque sale de una consulta
+ * agregada real: ninguna cifra de aquí es una estimación.
+ */
+export async function analizarSegmento(filtros: FiltrosSegmento = {}) {
+  const params: unknown[] = [];
+  const cond: string[] = [];
+
+  const igual = (columna: string, valor: unknown) => {
+    if (valor === undefined) return;
+    params.push(valor);
+    cond.push(`${columna} = $${params.length}`);
+  };
+
+  igual("c.edad_rango", filtros.edad_rango);
+  igual("c.ubicacion_departamento", filtros.departamento);
+  igual("c.tipo_cliente", filtros.tipo_cliente);
+  igual("c.canal_mas_usado", filtros.canal_mas_usado);
+  igual("c.elegible_mt", filtros.elegible_mt);
+  igual("c.es_movistar_total", filtros.es_movistar_total);
+  igual("c.es_usuario_app", filtros.es_usuario_app);
+  igual("f.gap_a_mt", filtros.gap_a_mt);
+  igual("f.salud_cliente", filtros.salud_cliente);
+  igual("p.cluster_id", filtros.cluster_id);
+
+  const where = cond.length ? `WHERE ${cond.join(" AND ")}` : "";
+  const desde = `
+      FROM clientes c
+      LEFT JOIN cliente_features f USING (cliente_id)
+      LEFT JOIN personas p USING (cliente_id)
+     ${where}`;
+
+  // La cohorte se recalcula dentro de cada consulta en vez de materializarse:
+  // son índices distintos y Postgres resuelve mejor cada plan por separado.
+  const coh = `WITH coh AS (SELECT c.cliente_id ${desde})`;
+
+  const filtrosAplicados = Object.fromEntries(
+    Object.entries(filtros).filter(([, v]) => v !== undefined),
+  );
+
+  const [resumen, total] = await Promise.all([
+    queryOne<Record<string, any>>(
+      `SELECT count(*) AS n_clientes,
+              round(avg(c.antiguedad_meses), 1) AS antiguedad_meses_prom,
+              round(avg(f.gasto_actual_total), 2) AS gasto_actual_total_prom,
+              round(avg(c.consumo_datos_gb_prom), 2) AS consumo_datos_gb_prom,
+              round(avg(c.dias_mora_prom), 2) AS dias_mora_prom,
+              count(*) FILTER (WHERE c.tipo_cliente = 'postpago') AS n_postpago,
+              count(*) FILTER (WHERE c.tipo_cliente = 'prepago') AS n_prepago,
+              count(*) FILTER (WHERE c.tipo_cliente IS NULL) AS n_sin_movil,
+              count(*) FILTER (WHERE c.es_usuario_app) AS n_usuarios_app,
+              count(*) FILTER (WHERE c.elegible_mt) AS n_elegibles,
+              count(*) FILTER (WHERE c.es_movistar_total) AS n_ya_mt,
+              count(*) FILTER (WHERE c.elegible_mt AND NOT EXISTS (
+                SELECT 1 FROM historial h
+                 WHERE h.cliente_id = c.cliente_id AND h.oferta_es_mt
+              )) AS n_elegibles_nunca_ofertados,
+              count(*) FILTER (WHERE f.salud_cliente = 'buena') AS n_salud_buena,
+              count(*) FILTER (WHERE f.salud_cliente = 'observada') AS n_salud_observada,
+              count(*) FILTER (WHERE f.salud_cliente = 'critica') AS n_salud_critica,
+              count(*) FILTER (WHERE COALESCE(p.alerta_retencion, false)) AS n_abstencion
+         ${desde}`,
+      params,
+    ),
+    queryOne<{ n: number }>("SELECT count(*) AS n FROM clientes"),
+  ]);
+
+  const n: number = resumen?.n_clientes ?? 0;
+  const nBase = total?.n ?? 0;
+
+  if (!resumen || n === 0) {
+    return {
+      filtros_aplicados: filtrosAplicados,
+      n_clientes: 0,
+      pct_de_la_base: 0,
+      confianza: "baja" as const,
+      nota: "Ningún cliente de la base cumple esos filtros. No hay nada que promediar: decírselo al asesor tal cual, sin estimar.",
+    };
+  }
+
+  const [gaps, personas, oportunidad, conversion] = await Promise.all([
+    query<Record<string, any>>(
+      `${coh} SELECT f.gap_a_mt AS gap, count(*) AS n
+                FROM cliente_features f JOIN coh USING (cliente_id)
+               GROUP BY 1 ORDER BY 2 DESC`,
+      params,
+    ),
+    query<Record<string, any>>(
+      `${coh} SELECT p.cluster_id, p.persona, count(*) AS n
+                FROM personas p JOIN coh USING (cliente_id)
+               GROUP BY 1, 2 ORDER BY 3 DESC`,
+      params,
+    ),
+    query<Record<string, any>>(
+      `${coh} SELECT s.oferta_id, o.nombre_oferta, o.es_movistar_total,
+                     count(*) AS n_clientes,
+                     round(avg(s.valor_esperado), 4) AS valor_esperado_prom,
+                     round(avg(s.ahorro_soles), 2) AS ahorro_soles_prom
+                FROM nbo_scores s
+                JOIN coh USING (cliente_id)
+                JOIN ofertas o USING (oferta_id)
+               WHERE s.rank = 1
+               GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 5`,
+      params,
+    ),
+    queryOne<Record<string, any>>(
+      `${coh} SELECT count(*) AS n_ofrecimientos,
+                     count(*) FILTER (WHERE h.resultado = 'aceptada') AS n_aceptadas,
+                     count(*) FILTER (WHERE h.oferta_es_mt) AS n_ofrecimientos_mt,
+                     count(*) FILTER (WHERE h.oferta_es_mt
+                                        AND h.resultado = 'aceptada') AS n_aceptadas_mt
+                FROM historial h JOIN coh USING (cliente_id)`,
+      params,
+    ),
+  ]);
+
+  const nOfr: number = conversion?.n_ofrecimientos ?? 0;
+  const nOfrMt: number = conversion?.n_ofrecimientos_mt ?? 0;
+
+  return {
+    filtros_aplicados: filtrosAplicados,
+    n_clientes: n,
+    pct_de_la_base: pct(n, nBase),
+    // Con pocos clientes los promedios son anécdota, no señal. El mismo
+    // criterio que la matriz de rebate aplica a sus tasas.
+    confianza: n < 100 ? ("baja" as const) : ("alta" as const),
+
+    perfil: {
+      antiguedad_meses_prom: resumen.antiguedad_meses_prom,
+      gasto_actual_total_prom: resumen.gasto_actual_total_prom,
+      consumo_datos_gb_prom: resumen.consumo_datos_gb_prom,
+      dias_mora_prom: resumen.dias_mora_prom,
+      n_postpago: resumen.n_postpago,
+      n_prepago: resumen.n_prepago,
+      n_sin_movil: resumen.n_sin_movil,
+      n_usuarios_app: resumen.n_usuarios_app,
+      pct_usuarios_app: pct(resumen.n_usuarios_app, n),
+    },
+
+    movistar_total: {
+      n_elegibles: resumen.n_elegibles,
+      pct_elegibles: pct(resumen.n_elegibles, n),
+      n_ya_mt: resumen.n_ya_mt,
+      pct_ya_mt: pct(resumen.n_ya_mt, n),
+      // Cobertura perdida: elegibles a los que nunca se les presentó MT. Es la
+      // oportunidad accionable del segmento, no un dato descriptivo.
+      n_elegibles_nunca_ofertados: resumen.n_elegibles_nunca_ofertados,
+      desglose_gap: gaps.map((g) => ({
+        gap: g.gap,
+        n: g.n,
+        pct: pct(g.n, n),
+      })),
+    },
+
+    salud: {
+      n_buena: resumen.n_salud_buena,
+      n_observada: resumen.n_salud_observada,
+      n_critica: resumen.n_salud_critica,
+      n_abstencion: resumen.n_abstencion,
+      pct_abstencion: pct(resumen.n_abstencion, n),
+    },
+
+    personas: personas.map((p) => ({
+      cluster_id: p.cluster_id,
+      persona: p.persona,
+      n: p.n,
+      pct: pct(p.n, n),
+    })),
+
+    oportunidad: oportunidad.map((o) => ({
+      oferta_id: o.oferta_id,
+      nombre_oferta: o.nombre_oferta,
+      es_movistar_total: o.es_movistar_total,
+      n_clientes: o.n_clientes,
+      pct: pct(o.n_clientes, n),
+      valor_esperado_prom: o.valor_esperado_prom,
+      ahorro_soles_prom: o.ahorro_soles_prom,
+    })),
+
+    conversion_historica: {
+      n_ofrecimientos: nOfr,
+      n_aceptadas: conversion?.n_aceptadas ?? 0,
+      tasa: tasa(conversion?.n_aceptadas ?? 0, nOfr),
+      n_ofrecimientos_mt: nOfrMt,
+      n_aceptadas_mt: conversion?.n_aceptadas_mt ?? 0,
+      tasa_mt: tasa(conversion?.n_aceptadas_mt ?? 0, nOfrMt),
+    },
+
+    nota_metodologica:
+      "conversion_historica está MEDIDA sobre los ofrecimientos reales del " +
+      "historial. oportunidad es una PROYECCIÓN del modelo: qué recomendaría " +
+      "hoy a cada cliente del segmento, no lo que ya pasó. No presentar una " +
+      "como la otra.",
   };
 }
 

@@ -221,6 +221,70 @@ y campañas.
 }
 ```
 
+## `GET /api/segmento?edad_rango=26-35&departamento=Ica&elegible_mt=true`
+
+Estadísticas de un **grupo** de clientes. El resto del contrato mira un cliente
+a la vez, que es lo correcto para armar un argumento; esto responde la otra
+mitad de la pregunta del asesor: *"¿y los clientes como este?"*.
+
+Filtros, todos opcionales y combinables: `edad_rango`, `departamento`,
+`tipo_cliente`, `cluster_id`, `gap_a_mt`, `salud_cliente`, `canal_mas_usado`,
+`elegible_mt`, `es_movistar_total`, `es_usuario_app`. **Sin filtros devuelve la
+planta entera** (100 000 clientes). Un valor fuera de su lista da `400`: un
+filtro con errata devolvería un segmento vacío que parece un hallazgo.
+
+- Todo conteo viene con su porcentaje. Devolver los dos juntos es lo que evita
+  que el copiloto tenga que dividir — y una división suya es una cifra sin
+  respaldo.
+- `conversion_historica` está **medida** sobre los ofrecimientos reales del
+  historial. `oportunidad` es una **proyección** del modelo: qué recomendaría
+  hoy. La `nota_metodologica` viaja en la respuesta para que no se confundan.
+- `confianza: "baja"` con menos de 100 clientes: promedios de un grupo chico
+  son anécdota.
+- Una tasa sobre cero ofrecimientos es `null`, no `0`: "nunca se midió" no es
+  "convierte 0%".
+- Cohorte vacía → `n_clientes: 0` y una `nota`, sin bloques que promediar.
+
+```jsonc
+{
+  "filtros_aplicados": { "edad_rango": "26-35" },
+  "n_clientes": 28045, "pct_de_la_base": 0.2804, "confianza": "alta",
+  "perfil": {
+    "antiguedad_meses_prom": 90.4, "gasto_actual_total_prom": 122.57,
+    "consumo_datos_gb_prom": 29.93, "dias_mora_prom": 7.98,
+    "n_postpago": 15811, "n_prepago": 10441, "n_sin_movil": 1793,
+    "n_usuarios_app": 21048, "pct_usuarios_app": 0.7505
+  },
+  "movistar_total": {
+    "n_elegibles": 3896, "pct_elegibles": 0.1389,
+    "n_ya_mt": 1984, "pct_ya_mt": 0.0707,
+    // Cobertura perdida del segmento: elegibles a los que nunca se les
+    // presentó MT. Es la oportunidad accionable, no un dato descriptivo.
+    "n_elegibles_nunca_ofertados": 498,
+    "desglose_gap": [{ "gap": "producto_hogar", "n": 9273, "pct": 0.3306 }]
+  },
+  "salud": {
+    "n_buena": 7954, "n_observada": 16569, "n_critica": 3522,
+    "n_abstencion": 3522, "pct_abstencion": 0.1256
+  },
+  "personas": [
+    { "cluster_id": 2, "persona": "Veterano Estable", "n": 7671, "pct": 0.2735 }
+  ],
+  "oportunidad": [                       // proyección del modelo
+    {
+      "oferta_id": "OF020", "nombre_oferta": "Movistar Total Basico",
+      "es_movistar_total": true, "n_clientes": 3896, "pct": 0.1389,
+      "valor_esperado_prom": 0.4203, "ahorro_soles_prom": 35.05
+    }
+  ],
+  "conversion_historica": {              // medida sobre el historial
+    "n_ofrecimientos": 84097, "n_aceptadas": 26902, "tasa": 0.3199,
+    "n_ofrecimientos_mt": 8122, "n_aceptadas_mt": 4818, "tasa_mt": 0.5932
+  },
+  "nota_metodologica": "..."
+}
+```
+
 ## `GET /api/clientes/:id/journey`
 
 Línea de tiempo reconstruida del historial real, cruzada con fricciones.
@@ -428,6 +492,7 @@ Los eventos `tool-call` / `tool-result` se emiten **mientras ocurren**, para que
 | `evaluar_oferta` | `cliente_id`, `oferta_id` | Score de UNA oferta concreta: probs, valor esperado, rank, y por qué no es la #1 |
 | `listar_ofertas` | — | El catálogo de `GET /ofertas`, para resolver nombres o IDs |
 | `proximos_clientes` | `foco?`, `canal?`, `solo_nunca_ofertados?`, `limit?` | La cola de `GET /prioridades`: a quién llamar ahora |
+| `analizar_segmento` | los 10 filtros de `GET /segmento`, todos opcionales | Estadísticas de un GRUPO: rango de edad, departamento, persona, o la planta entera |
 
 `GET /api/copiloto/tools` devuelve esta misma lista con sus esquemas de
 argumentos, más `{ proveedor, modelo, configurado }`. Sirve para verificar el
@@ -439,3 +504,9 @@ cableado del copiloto sin API key y sin gastar una llamada al LLM.
 2. No elige ofertas por su cuenta: la recomendación es la que devuelve `get_nbo`.
 3. Si `abstenerse = true`, no arma argumentario de venta: comunica la alerta.
 4. Español peruano neutro, directo, sin relleno. El asesor está en llamada.
+5. **La lectura es suya; la cifra, no.** La regla 1 prohíbe inventar números, no
+   pensar: interpretar lo que el tool devolvió —si el cliente es buen
+   candidato, si su segmento está desatendido— es el trabajo. Por eso no
+   responde volcando campos, sino con lectura → veredicto → evidencia → acción.
+   Y por eso al comparar cliente contra grupo cita las dos cifras tal como
+   vinieron en vez de restarlas: una resta suya sería una cifra sin respaldo.

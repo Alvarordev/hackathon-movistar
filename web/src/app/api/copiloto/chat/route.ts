@@ -80,6 +80,12 @@ function resumirResultado(toolName: string, output: unknown): string {
       return o.en_ranking ? `rank ${o.rank}` : "fuera del ranking";
     case "proximos_clientes":
       return `${o.n ?? 0} clientes priorizados (foco ${o.foco})`;
+    case "analizar_segmento":
+      if (!o.n_clientes) return "ningún cliente con esos filtros";
+      return (
+        `${o.n_clientes} clientes, ${o.movistar_total?.n_elegibles ?? 0} ` +
+        `elegibles a MT` + (o.confianza === "baja" ? " · confianza baja" : "")
+      );
     case "listar_ofertas":
       return `${o.ofertas?.length ?? 0} ofertas`;
     default:

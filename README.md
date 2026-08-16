@@ -86,6 +86,25 @@ Los cinco diálogos canónicos del asesor —qué ofrecer y por qué, cambio de 
 objeción de precio, speech de apertura y cliente en abstención— están
 verificados contra `CLI000013` y `CLI000001`.
 
+También contesta por el **colectivo**, no sólo por el cliente que tiene
+enfrente: rangos de edad, departamentos, personas, o la planta entera.
+
+```
+→ analizar_segmento({"edad_rango": "26-35"})
+← analizar_segmento: 28045 clientes, 3896 elegibles a MT
+
+El grupo de 26 a 35 años abarca a 28,045 clientes (28% de la base), con un
+gasto promedio de S/ 122.57 al mes. En comparación, CLI062541 paga S/ 259.80:
+muy por encima del promedio de su edad.
+
+3,896 de 28,045 (14%) son elegibles a Movistar Total sin brechas pendientes.
+```
+
+El copiloto cita las dos cifras y califica la diferencia en palabras, pero no
+las resta: una división suya sería una cifra sin respaldo, y esa es la regla que
+no se cruza. Por lo mismo, cada conteo viaja con su porcentaje ya calculado
+desde SQL.
+
 ## La interfaz
 
 No es una app aparte: **simula la herramienta interna que el asesor ya usa**
@@ -286,6 +305,7 @@ mise run pipeline && mise run dump
 
 | Documento | Qué contiene |
 |---|---|
+| [docs/como_funciona.md](docs/como_funciona.md) | Explicación técnica y de diseño completa del proyecto: qué se construyó, por qué, y cómo se entrena el modelo |
 | [docs/contrato_datos.md](docs/contrato_datos.md) | Contrato de la API. Fuente de verdad entre pipeline, backend y frontend |
 | [docs/hallazgos_datos.md](docs/hallazgos_datos.md) | EDA: qué lógica codifica realmente el dataset y cómo cambió el diseño |
 | `pipeline/artifacts/model_card.md` | Generado por el pipeline: AUC, lift por decil, calibración, decisiones de marcado |

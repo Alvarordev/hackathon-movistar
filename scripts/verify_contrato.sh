@@ -148,9 +148,30 @@ check "mercado MT ampliado por gap_a_mt" "$BASE/metrics" \
   "d['mercado_ampliado_mt']['total_alcanzable']>d['mercado_ampliado_mt']['ya_elegibles']"
 
 echo
+echo "Analisis de segmento"
+check "cohorte por rango de edad"          "$BASE/segmento?edad_rango=26-35" \
+  "d['n_clientes']==28045 and d['filtros_aplicados']=={'edad_rango':'26-35'}"
+check "sin filtros = planta entera"        "$BASE/segmento" \
+  "d['n_clientes']==100000 and d['pct_de_la_base']==1"
+check "cuadra con metrics del pipeline"    "$BASE/segmento" \
+  "d['movistar_total']['n_elegibles']==13650 and d['salud']['n_abstencion']==12531"
+check "todo conteo viene con su pct"       "$BASE/segmento?departamento=Ica" \
+  "all(0<=g['pct']<=1 for g in d['movistar_total']['desglose_gap'])
+   and abs(sum(g['pct'] for g in d['movistar_total']['desglose_gap'])-1)<0.01"
+check "distingue medido de proyectado"     "$BASE/segmento?cluster_id=1" \
+  "'conversion_historica' in d and 'oportunidad' in d and d['nota_metodologica']"
+check "cohorte vacia no inventa promedios" \
+  "$BASE/segmento?es_movistar_total=true&gap_a_mt=migracion_postpago" \
+  "d['n_clientes']==0 and 'perfil' not in d and d['confianza']=='baja'"
+check_status "filtro invalido da 400"      "$BASE/segmento?edad_rango=99" 400
+check_status "booleano invalido da 400"    "$BASE/segmento?elegible_mt=si"  400
+
+echo
 echo "Copiloto"
-check "los 9 tools cargan con esquema valido" "$BASE/copiloto/tools" \
-  "len(d['tools'])==9 and all(t['descripcion'] for t in d['tools'])"
+check "los 10 tools cargan con esquema valido" "$BASE/copiloto/tools" \
+  "len(d['tools'])==10 and all(t['descripcion'] for t in d['tools'])"
+check "tool analizar_segmento sin argumentos obligatorios" "$BASE/copiloto/tools" \
+  "'edad_rango' in next(t for t in d['tools'] if t['nombre']=='analizar_segmento')['argumentos']"
 check "tool get_nbo expone canal y limit"     "$BASE/copiloto/tools" \
   "set(next(t for t in d['tools'] if t['nombre']=='get_nbo')['argumentos'])=={'cliente_id','canal','limit'}"
 CHAT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/copiloto/chat" \

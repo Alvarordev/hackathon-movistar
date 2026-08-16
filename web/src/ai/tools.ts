@@ -10,7 +10,14 @@ import { z } from "zod";
 
 import {
   CANALES,
+  CLUSTER_IDS,
+  DEPARTAMENTOS,
+  EDAD_RANGOS,
+  GAPS_MT,
   MOTIVOS,
+  SALUD,
+  TIPOS_CLIENTE,
+  analizarSegmento,
   calcularAhorro,
   evaluarOferta,
   getCliente,
@@ -145,6 +152,41 @@ export const tools = {
         soloNuncaOfertados: solo_nunca_ofertados,
         limit: limit ?? 5,
       }),
+  }),
+
+  analizar_segmento: tool({
+    description:
+      "Estadísticas de un GRUPO de clientes, no de uno solo. Usar siempre que " +
+      "la pregunta sea sobre un colectivo: un rango de edad, un departamento, " +
+      "un segmento o persona, los elegibles a MT, los clientes con mora, o la " +
+      "planta entera. También sirve para situar al cliente en atención contra " +
+      "su propio grupo: filtra por sus características y compara. Los filtros " +
+      "se combinan y todos son opcionales; SIN filtros devuelve la base " +
+      "completa. Devuelve tamaño del grupo, perfil promedio, elegibilidad y " +
+      "cobertura de Movistar Total, salud, personas, las ofertas que el motor " +
+      "más recomienda y la conversión histórica medida.",
+    inputSchema: z.object({
+      edad_rango: z.enum(EDAD_RANGOS).optional(),
+      departamento: z.enum(DEPARTAMENTOS).optional(),
+      tipo_cliente: z.enum(TIPOS_CLIENTE).optional(),
+      cluster_id: z
+        .number()
+        .int()
+        .min(Math.min(...CLUSTER_IDS))
+        .max(Math.max(...CLUSTER_IDS))
+        .optional()
+        .describe("Cluster/persona del cliente, de 0 a 5"),
+      gap_a_mt: z
+        .enum(GAPS_MT)
+        .optional()
+        .describe("Qué le falta al cliente para ser elegible a Movistar Total"),
+      salud_cliente: z.enum(SALUD).optional(),
+      canal_mas_usado: z.enum(CANALES).optional(),
+      elegible_mt: z.boolean().optional(),
+      es_movistar_total: z.boolean().optional(),
+      es_usuario_app: z.boolean().optional(),
+    }),
+    execute: async (filtros) => analizarSegmento(filtros),
   }),
 
   listar_ofertas: tool({
