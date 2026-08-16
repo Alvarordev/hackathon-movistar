@@ -118,7 +118,7 @@ export function Cockpit({ cliente, journey, nboInicial }: Props) {
           simplemente flota encima, que es lo que corresponde cuando no hay
           ancho para las dos cosas. */}
       <div
-        className={`grid min-h-0 flex-1 gap-3 p-3 transition-[margin] duration-[250ms] ease-drawer lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] ${
+        className={`grid min-h-0 flex-1 gap-3 p-3 transition-[margin] duration-[250ms] ease-drawer motion-reduce:transition-none lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] ${
           abierto ? "xl:mr-[424px]" : ""
         }`}
       >
