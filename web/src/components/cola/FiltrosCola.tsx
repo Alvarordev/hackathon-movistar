@@ -24,6 +24,9 @@ export function FiltrosCola({ foco, canal, soloNunca }: Props) {
     for (const [k, v] of Object.entries(estado)) {
       if (v) sp.set(k, v);
     }
+    // `pagina` se descarta a propósito: cambiar un filtro cambia el conjunto,
+    // y quedarse en la página 40 de un resultado que ahora tiene 3 deja la
+    // pantalla vacía sin explicar por qué.
     iniciar(() => router.push(`/?${sp.toString()}`));
   }
 

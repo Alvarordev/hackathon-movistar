@@ -202,6 +202,10 @@ export interface Prioridades {
   foco: "mt" | "todos";
   canal: Canal | null;
   solo_nunca_ofertados: boolean;
+  /** Clientes en la cola con estos filtros. `n` es solo los de esta página. */
+  total: number;
+  limit: number;
+  offset: number;
   n: number;
   clientes: ClientePrioridad[];
 }

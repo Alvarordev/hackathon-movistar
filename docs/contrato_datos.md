@@ -200,20 +200,29 @@ y campañas.
   MT — ataca directamente la **cobertura perdida** (12.6% de los elegibles).
 - Los clientes en abstención **no aparecen**: llamarlos para vender es el
   error que el motor existe para evitar.
-- `limit` máximo 200 (default 25).
+- `limit` máximo 200 (default 25). `offset` entero ≥ 0 (default 0) para paginar.
+- `total` es cuántos clientes hay en la cola con esos filtros; `n` es cuántos
+  trae esta página. Sin `total` no hay forma de saber que detrás de las 50 filas
+  de pantalla hay 57 mil clientes, y una cola sin contexto se lee como un
+  dataset recortado.
+- El orden es **total y determinístico**: termina desempatando por `cliente_id`.
+  Sin ese último criterio hay grupos de ~12 clientes con las tres claves
+  anteriores idénticas y SQL no garantiza en qué orden los devuelve — paginar
+  sobre un orden inestable repite o se salta clientes.
 
 ```jsonc
 {
-  "foco": "mt", "canal": null, "solo_nunca_ofertados": true, "n": 25,
+  "foco": "mt", "canal": null, "solo_nunca_ofertados": true,
+  "total": 57164, "limit": 50, "offset": 0, "n": 50,
   "clientes": [
     {
-      "cliente_id": "CLI093495",
+      "cliente_id": "CLI038262",
       "persona": "Convergente Dormido",
       "gap_a_mt": "ninguno",
       "oferta_id": "OF020", "nombre_oferta": "Movistar Total Basico",
       "es_movistar_total": true, "avanza_a_mt": true,
-      "rank": 1, "valor_esperado": 0.4317, "prob_aceptacion": 0.5081,
-      "ahorro_soles": 89.90, "canal_sugerido": "Digital",
+      "rank": 1, "valor_esperado": 0.6179, "prob_aceptacion": 0.7271,
+      "ahorro_soles": 109.90, "canal_sugerido": "Digital",
       "nunca_ofrecido_mt": true,
       "tiene_ruta_mt": false, "ahorro_soles_proyectado": null
     }

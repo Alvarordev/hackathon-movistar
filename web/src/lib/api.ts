@@ -74,6 +74,7 @@ export const api = {
       canal?: string;
       solo_nunca_ofertados?: boolean;
       limit?: number;
+      offset?: number;
     } = {},
   ) => pedir<Prioridades>(`/prioridades${qs(opts)}`),
 

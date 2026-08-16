@@ -9,6 +9,7 @@ export const GET = handler(async (req: Request) => {
   const canal = url.searchParams.get("canal") ?? undefined;
   const soloNunca = url.searchParams.get("solo_nunca_ofertados") === "true";
   const limitRaw = url.searchParams.get("limit");
+  const offsetRaw = url.searchParams.get("offset");
 
   if (foco !== "mt" && foco !== "todos") {
     return fail("parametro_invalido", "foco debe ser 'mt' o 'todos'");
@@ -20,8 +21,18 @@ export const GET = handler(async (req: Request) => {
   if (limitRaw && (!Number.isInteger(limit) || limit! < 1)) {
     return fail("parametro_invalido", "limit debe ser un entero positivo");
   }
+  const offset = offsetRaw ? Number(offsetRaw) : undefined;
+  if (offsetRaw && (!Number.isInteger(offset) || offset! < 0)) {
+    return fail("parametro_invalido", "offset debe ser un entero >= 0");
+  }
 
   return ok(
-    await getPrioridades({ foco, canal, soloNuncaOfertados: soloNunca, limit }),
+    await getPrioridades({
+      foco,
+      canal,
+      soloNuncaOfertados: soloNunca,
+      limit,
+      offset,
+    }),
   );
 });

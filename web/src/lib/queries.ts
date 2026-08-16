@@ -331,26 +331,28 @@ export async function getPrioridades(opts: {
   canal?: string;
   soloNuncaOfertados?: boolean;
   limit?: number;
+  offset?: number;
 }) {
   const foco = opts.foco ?? "mt";
   const limit = Math.min(opts.limit ?? 25, 200);
-  const params: unknown[] = [];
+  const offset = Math.max(opts.offset ?? 0, 0);
   const cond: string[] = ["NOT COALESCE(p.alerta_retencion, false)"];
 
+  // Los filtros se comparten entre la página y el conteo total: si divergen,
+  // el "de N" del paginador miente sobre lo que realmente se está listando.
+  const filtros: unknown[] = [];
   if (foco === "mt") cond.push("s.avanza_a_mt");
   if (opts.canal) {
-    params.push(opts.canal);
-    cond.push(`s.canal_sugerido = $${params.length}`);
+    filtros.push(opts.canal);
+    cond.push(`s.canal_sugerido = $${filtros.length}`);
   }
   if (opts.soloNuncaOfertados) {
     cond.push(`NOT EXISTS (
       SELECT 1 FROM historial h
        WHERE h.cliente_id = s.cliente_id AND h.oferta_es_mt)`);
   }
-  params.push(limit);
 
-  const filas = await query<Record<string, any>>(
-    `WITH mejor AS (
+  const CTE = `WITH mejor AS (
        SELECT DISTINCT ON (s.cliente_id)
               s.cliente_id, s.oferta_id, s.rank, s.valor_esperado,
               s.prob_aceptacion, s.ahorro_soles, s.canal_sugerido, s.avanza_a_mt
@@ -358,7 +360,13 @@ export async function getPrioridades(opts: {
          LEFT JOIN personas p ON p.cliente_id = s.cliente_id
         WHERE ${cond.join(" AND ")}
         ORDER BY s.cliente_id, s.rank
-     )
+     )`;
+
+  const params = [...filtros, limit, offset];
+
+  const [filas, totales] = await Promise.all([
+    query<Record<string, any>>(
+      `${CTE}
      SELECT m.*, o.nombre_oferta, o.es_movistar_total,
             f.gap_a_mt, p.persona,
             r.oferta_puente_id IS NOT NULL AS tiene_ruta_mt,
@@ -374,15 +382,32 @@ export async function getPrioridades(opts: {
        LEFT JOIN ruta_mt r ON r.cliente_id = m.cliente_id
       ORDER BY round(m.valor_esperado, 2) DESC,
                m.ahorro_soles DESC NULLS LAST,
-               m.valor_esperado DESC
-      LIMIT $${params.length}`,
-    params,
-  );
+               m.valor_esperado DESC,
+               -- Desempate final. Sin él el orden no es total: hay grupos de
+               -- ~12 clientes con las tres claves anteriores idénticas, y SQL
+               -- no garantiza en qué orden los devuelve. Con LIMIT solo daba
+               -- igual; paginando, un reordenamiento entre la página 1 y la 2
+               -- repite o se salta clientes.
+               m.cliente_id
+      LIMIT $${filtros.length + 1} OFFSET $${filtros.length + 2}`,
+      params,
+    ),
+    queryOne<{ total: number }>(
+      `${CTE} SELECT count(*)::int AS total FROM mejor`,
+      filtros,
+    ),
+  ]);
 
   return {
     foco,
     canal: opts.canal ?? null,
     solo_nunca_ofertados: Boolean(opts.soloNuncaOfertados),
+    // `total` es cuántos clientes hay en la cola con estos filtros; `n` es
+    // cuántos trae esta página. Mostrar solo `n` hacía parecer que la planta
+    // entera eran 50 clientes.
+    total: totales?.total ?? 0,
+    limit,
+    offset,
     n: filas.length,
     clientes: filas,
   };

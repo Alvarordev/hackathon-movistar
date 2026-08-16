@@ -1,6 +1,7 @@
 import { AlertTriangle, Inbox } from "lucide-react";
 
 import { FiltrosCola } from "@/components/cola/FiltrosCola";
+import { Paginacion } from "@/components/cola/Paginacion";
 import { TablaCola } from "@/components/cola/TablaCola";
 import { Panel, Vacio } from "@/components/ui/Base";
 import { api, numero } from "@/lib/api";
@@ -18,6 +19,9 @@ export default async function ColaPage({ searchParams }: Props) {
   const canal = CANALES.includes(sp.canal as never) ? sp.canal : undefined;
   const soloNunca = sp.solo_nunca_ofertados === "true";
 
+  const POR_PAGINA = 50;
+  const pagina = Math.max(1, Number(sp.pagina) || 1);
+
   let datos = null;
   let error: string | null = null;
   try {
@@ -25,7 +29,8 @@ export default async function ColaPage({ searchParams }: Props) {
       foco,
       canal,
       solo_nunca_ofertados: soloNunca,
-      limit: 50,
+      limit: POR_PAGINA,
+      offset: (pagina - 1) * POR_PAGINA,
     });
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
@@ -44,8 +49,11 @@ export default async function ColaPage({ searchParams }: Props) {
           </p>
         </div>
         {datos ? (
-          <p className="tabular text-cuerpo text-tinta-3">
-            {numero(datos.n)} clientes priorizados
+          <p className="text-cuerpo text-tinta-3">
+            <span className="tabular font-semibold text-tinta">
+              {numero(datos.total)}
+            </span>{" "}
+            clientes en cola
           </p>
         ) : null}
       </header>
@@ -65,7 +73,14 @@ export default async function ColaPage({ searchParams }: Props) {
           />
         </Panel>
       ) : datos && datos.clientes.length > 0 ? (
-        <TablaCola clientes={datos.clientes} />
+        <>
+          <TablaCola clientes={datos.clientes} />
+          <Paginacion
+            total={datos.total}
+            limit={datos.limit}
+            offset={datos.offset}
+          />
+        </>
       ) : (
         <Panel>
           <Vacio
