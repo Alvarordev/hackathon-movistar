@@ -31,6 +31,7 @@ import json
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
 from . import carga, dataset
@@ -97,9 +98,32 @@ def _auc_baseline_mt(df_tr: pd.DataFrame, df_te: pd.DataFrame,
     return float(roc_auc_score(y_te, score))
 
 
+def _calibrar(p_valid: np.ndarray, y_valid: np.ndarray) -> IsotonicRegression:
+    """Calibración isotónica ajustada sobre el split de validación.
+
+    Hace falta porque el early stopping mira AUC, que es una métrica de ORDEN y
+    es ciega a la calibración: corta apenas el ranking deja de mejorar y deja
+    las probabilidades pegadas a la tasa base. Medido en este dataset, el modelo
+    predecía 0.495 para ofertas MT cuando la tasa real de aceptación es 0.697 —
+    veinte puntos de diferencia en un número que el asesor le dice al cliente en
+    voz alta.
+
+    Isotónica y no reentrenar con otra métrica porque es MONÓTONA: no puede
+    alterar el orden de las predicciones, así que el AUC y el ranking de la cola
+    quedan intactos. Solo corrige los valores.
+
+    Se ajusta sobre abril (validación), nunca sobre train —donde el modelo ya
+    vio los datos y sus predicciones son optimistas— ni sobre test, que tiene
+    que quedar limpio para la evaluación honesta.
+    """
+    iso = IsotonicRegression(out_of_bounds="clip")
+    iso.fit(p_valid, y_valid)
+    return iso
+
+
 def _entrenar(
     df: pd.DataFrame, features: list[str], y: pd.Series, nombre: str
-) -> tuple[lgb.Booster, dict]:
+) -> tuple[lgb.Booster, IsotonicRegression, dict]:
     X = dataset.matriz_X(df, features)
     _auditar_leakage(X, nombre)
 
@@ -125,16 +149,33 @@ def _entrenar(
     mejor = booster.best_iteration or N_ARBOLES
 
     p_tr = booster.predict(Xtr, num_iteration=mejor)
+    p_va = booster.predict(Xva, num_iteration=mejor)
     p_te = booster.predict(Xte, num_iteration=mejor)
+
+    calibrador = _calibrar(p_va, yva.to_numpy())
+    p_te_cal = calibrador.predict(p_te)
+
     auc_tr = roc_auc_score(ytr, p_tr)
     auc_te = roc_auc_score(yte, p_te)
+    # Debe dar idéntico al de arriba: la isotónica es monótona. Si difiere, el
+    # calibrador rompió el orden y hay un bug.
+    auc_te_cal = roc_auc_score(yte, p_te_cal)
     auc_mt = _auc_baseline_mt(df[en_train], df[en_test], ytr, yte)
-    brier = brier_score_loss(yte, p_te)
+    brier_sin = brier_score_loss(yte, p_te)
+    brier = brier_score_loss(yte, p_te_cal)
+    # Piso de comparación: el Brier de predecir siempre la tasa base. Si el
+    # modelo no le gana, sus probabilidades no aportan información.
+    base_te = float(yte.mean())
+    brier_constante = base_te * (1 - base_te)
+    # El lift se mide sobre las predicciones crudas: es una métrica de orden y
+    # la calibración no lo mueve.
     deciles = _lift_por_decil(yte.to_numpy(), p_te)
 
     log(f"[{nombre}] árboles {mejor} | AUC train {auc_tr:.4f} | "
         f"AUC test {auc_te:.4f} | baseline solo-MT {auc_mt:.4f} | "
-        f"Brier {brier:.4f} | lift decil 1 {deciles[0] if deciles else float('nan')}x")
+        f"Brier {brier_sin:.4f} -> {brier:.4f} calibrado "
+        f"(constante {brier_constante:.4f}) | "
+        f"lift decil 1 {deciles[0] if deciles else float('nan')}x")
 
     if auc_te > AUC_SOSPECHOSO:
         raise AssertionError(
@@ -146,11 +187,15 @@ def _entrenar(
     metricas = {
         "auc_train": round(float(auc_tr), 4),
         "auc_test": round(float(auc_te), 4),
+        # Prueba de que la calibración no tocó el ranking.
+        "auc_test_calibrado": round(float(auc_te_cal), 4),
         "auc_baseline_solo_mt": None if np.isnan(auc_mt) else round(auc_mt, 4),
         "aporte_sobre_baseline": (
             None if np.isnan(auc_mt) else round(float(auc_te - auc_mt), 4)
         ),
         "brier_test": round(float(brier), 4),
+        "brier_test_sin_calibrar": round(float(brier_sin), 4),
+        "brier_predictor_constante": round(float(brier_constante), 4),
         "n_train": int(len(Xtr)),
         "n_valid": int(len(Xva)),
         "n_test": int(len(Xte)),
@@ -166,7 +211,7 @@ def _entrenar(
             "test_desde": TEST_DESDE,
         },
     }
-    return booster, metricas
+    return booster, calibrador, metricas
 
 
 def main() -> None:
@@ -192,7 +237,9 @@ def main() -> None:
 
     # ---------------- Modelo B: contactabilidad (universo completo)
     y_b = (df["contactabilidad"] == "contactado").astype(int)
-    modelo_b, met_b = _entrenar(df, dataset.FEATURES_B, y_b, "contactabilidad")
+    modelo_b, _cal_b, met_b = _entrenar(
+        df, dataset.FEATURES_B, y_b, "contactabilidad"
+    )
 
     # ---------------- Modelo A: aceptación (solo contactados)
     contactados = df["contactabilidad"] == "contactado"
@@ -200,7 +247,7 @@ def main() -> None:
     log(f"[aceptacion] descartadas {int((~contactados).sum()):,} filas no "
         "contactadas (son 'pendiente', no rechazos)")
     y_a = (df_a["resultado"] == "aceptada").astype(int)
-    modelo_a, met_a = _entrenar(df_a, dataset.FEATURES_A, y_a, "aceptacion")
+    modelo_a, cal_a, met_a = _entrenar(df_a, dataset.FEATURES_A, y_a, "aceptacion")
 
     # Un AUC de 0.50 no es un bug: significa que la variable no es predecible
     # con los datos disponibles. Se reporta, no se disimula.
@@ -218,6 +265,31 @@ def main() -> None:
                         num_iteration=modelo_a.best_iteration)
     modelo_b.save_model(str(ARTIFACTS_DIR / "modelo_contactabilidad.txt"),
                         num_iteration=modelo_b.best_iteration)
+
+    # Solo se persiste el calibrador de aceptación. El de contactabilidad no
+    # hace falta: sin señal, el modelo se queda en la tasa base (predice
+    # 0.843-0.853 contra un 0.848 real), o sea ya está calibrado por accidente.
+    #
+    # Se guarda como JSON y no como pickle a propósito: los puntos de quiebre se
+    # leen a ojo, así que el mapeo "0.5068 -> 0.697" queda auditable en vez de
+    # escondido en un binario atado a la versión de sklearn.
+    (ARTIFACTS_DIR / "calibrador_aceptacion.json").write_text(
+        json.dumps(
+            {
+                "metodo": "isotonic",
+                "ajustado_sobre": "validacion (abril 2026)",
+                "nota": (
+                    "Mapea la salida cruda del modelo a la tasa de aceptación "
+                    "observada. Es monótona: no altera el ranking, solo los "
+                    "valores. Aplicar con np.interp(p, x, y)."
+                ),
+                "x": [round(float(v), 6) for v in cal_a.X_thresholds_],
+                "y": [round(float(v), 6) for v in cal_a.y_thresholds_],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     importancias = sorted(
         zip(modelo_a.feature_name(), modelo_a.feature_importance("gain")),

@@ -333,6 +333,13 @@ def main() -> None:
     modelo_a = lgb.Booster(model_file=str(ARTIFACTS_DIR / "modelo_aceptacion.txt"))
     modelo_b = lgb.Booster(model_file=str(ARTIFACTS_DIR / "modelo_contactabilidad.txt"))
 
+    # La salida cruda del modelo A está pegada a la tasa base (ver _calibrar en
+    # modelos.py). Sin esto, la pantalla le muestra al asesor un 51% donde la
+    # tasa medida es 70%.
+    cal = json.loads((ARTIFACTS_DIR / "calibrador_aceptacion.json").read_text())
+    cal_x = np.asarray(cal["x"], dtype=float)
+    cal_y = np.asarray(cal["y"], dtype=float)
+
     cli_prep = dataset.preparar_clientes(cli, ofertas, feats)
     of_prep = dataset.preparar_ofertas(ofertas)
 
@@ -354,7 +361,11 @@ def main() -> None:
         for canal in CANALES:
             p = pares_c.assign(canal=canal, fecha=FECHA_SCORING)
             m = dataset.construir_matriz(p, cli_c, of_prep, niveles)
-            m["prob_aceptacion"] = modelo_a.predict(dataset.matriz_X(m, fa))
+            # np.interp reproduce exactamente IsotonicRegression.predict con
+            # out_of_bounds="clip", y evita arrastrar sklearn hasta el scoring.
+            m["prob_aceptacion"] = np.interp(
+                modelo_a.predict(dataset.matriz_X(m, fa)), cal_x, cal_y
+            )
             m["prob_contacto"] = modelo_b.predict(dataset.matriz_X(m, fb))
             m["valor_esperado"] = m["prob_aceptacion"] * m["prob_contacto"]
             por_canal.append(m)
