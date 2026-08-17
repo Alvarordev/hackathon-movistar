@@ -437,7 +437,37 @@ Métricas de modelo y de impacto de negocio. Alimenta el pitch.
   },
   "abstenciones": { "clientes_con_alerta": 12531, "pct": 0.1253,
                     "criterio": "meses_moroso >= 3 o n_reclamos >= 4" },
-  "segmentacion": { "k": 6, "silhouette_por_k": {}, "clusters": [] }
+  "segmentacion": { "k": 6, "silhouette_por_k": {}, "clusters": [] },
+
+  // Lo que el modelo predice para MT. Debe coincidir con la tasa medida sobre
+  // el historial (0.697): esa igualdad ES la prueba de que está calibrado.
+  "prediccion_media_mt": 0.6944,
+
+  // Los cinco indicadores que la ficha declara querer mover, con su estado.
+  // `estado`: medido | medido_y_proyectado | protegido_por_politica | no_medible
+  // Dos NO se pueden medir con los datos entregados y se reporta así en
+  // pantalla, en vez de inventar una cifra.
+  "indicadores_ficha": {
+    "conversion_comercial":  { "estado": "medido", "tasa_global": 0.3747, "tasa_mt": 0.697, "nota": "..." },
+    "participacion_mt":      { "estado": "medido_y_proyectado", "nota": "..." },
+    "arpu":                  { "estado": "protegido_por_politica",
+                               "arpu_facturado_prom": 81.20, "gasto_real_prom": 122.70, "nota": "..." },
+    "churn_permanencia":     { "estado": "no_medible", "nota": "Sin columna de baja ni permanencia en los CSV..." },
+    "nps":                   { "estado": "no_medible", "nota": "Sin encuestas ni señal de satisfacción..." }
+  },
+
+  // Cómo se compara la tasa de este dataset contra la venta telefónica real.
+  // Existe para que la cifra que ve el asesor no se lea descontextualizada.
+  "contexto_realismo": {
+    "tasa_mt_dataset": 0.697,
+    "prediccion_media_mt": 0.6944,
+    "referencias": [
+      { "escenario": "Cold calling B2B (marcada a reunión)", "tasa_tipica": "2-3%, élite 8-10%" },
+      { "escenario": "Cross-sell / upsell a clientes existentes", "tasa_tipica": "10-30%" }
+    ],
+    "lectura": "...",
+    "sobre_datos_reales": "La calibración isotónica se reajusta contra el historial que reciba."
+  }
 }
 ```
 

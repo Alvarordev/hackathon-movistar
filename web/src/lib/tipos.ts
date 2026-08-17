@@ -366,6 +366,38 @@ export interface Metrics {
     k: number;
     clusters: Array<{ cluster_id: number; nombre: string; descripcion: string; n: number }>;
   };
+  /** Lo que el modelo predice para MT. Debe coincidir con la tasa medida. */
+  prediccion_media_mt?: number;
+  indicadores_ficha?: {
+    conversion_comercial?: IndicadorFicha;
+    participacion_mt?: IndicadorFicha;
+    arpu?: IndicadorFicha;
+    churn_permanencia?: IndicadorFicha;
+    nps?: IndicadorFicha;
+  };
+  /** Cómo se compara la tasa del dataset contra la venta telefónica real. */
+  contexto_realismo?: {
+    tasa_mt_dataset: number;
+    prediccion_media_mt: number;
+    referencias: Array<{ escenario: string; tasa_tipica: string }>;
+    lectura: string;
+    sobre_datos_reales: string;
+  };
+}
+
+/** Un indicador de la ficha con su estado. Los campos numéricos solo vienen
+ *  en los que se pueden medir. */
+export interface IndicadorFicha {
+  estado:
+    | "medido"
+    | "medido_y_proyectado"
+    | "protegido_por_politica"
+    | "no_medible";
+  nota: string;
+  tasa_global?: number;
+  tasa_mt?: number;
+  arpu_facturado_prom?: number;
+  gasto_real_prom?: number;
 }
 
 export interface ErrorApi {

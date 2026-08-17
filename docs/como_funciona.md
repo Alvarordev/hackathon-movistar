@@ -252,6 +252,28 @@ El calibrador se guarda como JSON (`pipeline/artifacts/calibrador_aceptacion.jso
 
 **El modelo de contactabilidad no se calibra**, y la razón es interesante: al no tener ninguna señal, sus predicciones ya se quedaron pegadas a la tasa base (~0.848 real), o sea que está bien calibrado por accidente. Aplicarle la isotónica no movió su Brier (0.1291 → 0.1292), lo que confirma el diagnóstico del Hallazgo 2 desde otro ángulo.
 
+#### ¿Y un 70% de aceptación es creíble?
+
+No para venta telefónica del mundo real, y conviene decirlo antes de que lo pregunten. Contra las referencias de la industria:
+
+| Escenario | Tasa típica |
+|---|---|
+| Llamada en frío B2B (marcada → reunión) | 2–3%, élite 8–10% |
+| Cross-sell / upsell a clientes existentes | 10–30% |
+| Upsell de alto rendimiento con oferta complementaria | 15–25% |
+| **Este dataset (MT, sobre contactados)** | **69.7%** |
+| Este dataset (resto del portafolio) | 34.1% |
+
+La comparación justa no es contra la llamada en frío: acá el cliente **ya es de la casa**, la métrica es condicional a que ya se logró contactarlo, y la oferta le ahorra S/109 al mes. El piso legítimo es el de cross-sell — y aun así el dataset queda 2–4× por encima de su techo.
+
+Lo importante es de quién es ese optimismo: **del generador sintético del desafío, no del modelo**. El modelo predice 69.4% donde el historial mide 69.7%, y esa coincidencia es precisamente la evidencia de que está calibrado y no inflado. Reportar 20% "porque suena más realista" sería inventar una cifra que contradice los datos entregados — exactamente lo que el proyecto no hace.
+
+Sobre datos reales de Movistar, la corrección es automática: la calibración isotónica se ajusta contra el historial que reciba, así que devolvería las tasas reales sin tocar una línea de código. Esa propiedad es el argumento de fondo — no defendemos el 70%, defendemos que la arquitectura reporta lo que los datos digan.
+
+Todo esto está visible en la pantalla de Supervisión, dentro de la tarjeta de transparencia del modelo, y en `metrics.json` bajo `contexto_realismo`.
+
+*Fuentes de los benchmarks: [martal.ca](https://martal.ca/cold-call-statistics-lb/), [saleshive.com](https://saleshive.com/blog/b2b-sales-cold-calling-benchmarks-teams-2025), [apollo.io](https://www.apollo.io/insights/whats-the-average-conversion-rate-for-cold-prospecting), [opensend.com](https://www.opensend.com/post/upsell-cross-sell-take-rate-statistics-ecommerce), [kpidepot.com](https://kpidepot.com/kpi/upsell-cross-sell-conversion-rate).*
+
 **El límite honesto**: aún quedan ~7,000 clientes que comparten el 72.9% exacto. No es un defecto a corregir — son clientes que, a la resolución que estos datos sintéticos permiten, tienen el mismo perfil de riesgo, y asignarles números distintos sería fabricar precisión. Lo que separa a dos prospectos con la misma probabilidad es el resto del análisis: su `gap_a_mt`, su ahorro concreto en soles, su persona y su historial — que es exactamente lo que la cola usa para desempatar y lo que el cockpit muestra al abrirlos.
 
 Un efecto secundario que vale documentar: al ensancharse la separación entre MT (0.69) y el resto (0.34), varios cientos de clientes que tenían su oferta de blindaje fuera del top 6 que el pipeline persiste (`TOP_N` en `pipeline/src/scoring.py`) pasaron a entrar en él, así que la cola con foco MT creció de 56,894 a 57,304 clientes. No es una regresión: son clientes cuya mejor oportunidad de convergencia antes quedaba fuera del corte.

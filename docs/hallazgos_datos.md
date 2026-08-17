@@ -37,6 +37,17 @@ Efectos numéricos débiles pero reales (correlación con la aceptación):
 **Consecuencia de diseño:** el techo de AUC de este dataset está cerca de 0.57.
 Un modelo que reporte 0.85 tiene leakage. Ver sección 5.
 
+**La magnitud también es sintética.** No solo MT es la única señal: su tasa es
+irreal. Un cross-sell a clientes existentes convierte 10–30% en la industria, y
+una llamada en frío B2B 2–3%; el 0.697 de acá está 2–4x por encima del techo de
+lo primero. La comparación justa es contra cross-sell —el cliente ya es de la
+casa, la tasa es condicional a haberlo contactado y la oferta le ahorra dinero—
+pero el margen sigue siendo enorme. Importa para el pitch: el modelo reporta
+69.4% porque el historial mide 69.7%, o sea que está calibrado; el optimismo lo
+puso el generador. Sobre datos reales la calibración se reajusta sola. Ver
+`contexto_realismo` en `metrics.json` y §5.5 de
+[como_funciona.md](como_funciona.md).
+
 ## 2. La contactabilidad no es predecible con estos datos
 
 `resultado = 'pendiente'` coincide **exactamente** con

@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 
 import { Funnel } from "@/components/supervision/Funnel";
+import { IndicadoresFicha } from "@/components/supervision/IndicadoresFicha";
 import { KpisMt } from "@/components/supervision/KpisMt";
 import { Modelo } from "@/components/supervision/Modelo";
 import { Rechazos } from "@/components/supervision/Rechazos";
@@ -54,6 +55,8 @@ export default async function SupervisionPage() {
           </div>
           <KpisMt metrics={metrics} />
         </div>
+
+        <IndicadoresFicha metrics={metrics} />
 
         <Modelo metrics={metrics} />
       </div>
