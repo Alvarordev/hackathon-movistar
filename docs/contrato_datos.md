@@ -213,16 +213,16 @@ y campañas.
 ```jsonc
 {
   "foco": "mt", "canal": null, "solo_nunca_ofertados": true,
-  "total": 57164, "limit": 50, "offset": 0, "n": 50,
+  "total": 57304, "limit": 50, "offset": 0, "n": 50,
   "clientes": [
     {
-      "cliente_id": "CLI038262",
+      "cliente_id": "CLI061263",
       "persona": "Convergente Dormido",
       "gap_a_mt": "ninguno",
       "oferta_id": "OF020", "nombre_oferta": "Movistar Total Basico",
       "es_movistar_total": true, "avanza_a_mt": true,
-      "rank": 1, "valor_esperado": 0.6179, "prob_aceptacion": 0.7271,
-      "ahorro_soles": 109.90, "canal_sugerido": "Digital",
+      "rank": 1, "valor_esperado": 0.6498, "prob_aceptacion": 0.7636,
+      "ahorro_soles": 109.90, "canal_sugerido": "Call In",
       "nunca_ofrecido_mt": true,
       "tiene_ruta_mt": false, "ahorro_soles_proyectado": null
     }
@@ -397,11 +397,11 @@ Métricas de modelo y de impacto de negocio. Alimenta el pitch.
 {
   "generado_en": "2026-08-15T14:02:11Z",
   "modelo_aceptacion": {
-    "auc_test": 0.5874, "auc_train": 0.5998,
+    "auc_test": 0.5883, "auc_train": 0.6112,
     // Piso de comparación: una regla de UNA variable ("¿la oferta es MT?").
     // El margen entre ambos es todo lo que aportan las otras 39 features.
     "auc_baseline_solo_mt": 0.5635, "aporte_sobre_baseline": 0.0239,
-    "brier_test": 0.2273,            // calibración: la probabilidad se le muestra al asesor
+    "brier_test": 0.2229,            // calibración: la probabilidad se le muestra al asesor
     "n_train": 127020, "n_valid": 42600, "n_test": 84998,
     "tasa_base_train": 0.3747,
     "lift_decil_superior": 1.79,

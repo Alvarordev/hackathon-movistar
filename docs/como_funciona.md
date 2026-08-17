@@ -208,15 +208,16 @@ Se ajustaron los hiperparámetros (tasa de aprendizaje más baja, menos hojas po
 
 | Métrica | Modelo A (Aceptación) | Modelo B (Contactabilidad) |
 |---|---|---|
-| AUC de prueba | **0.5874** | 0.4998 |
-| AUC de entrenamiento | 0.5998 | 0.5186 |
-| Diferencia (señal de sobreajuste) | 0.012 (sana) | 0.019 (sana) |
+| AUC de prueba | **0.5883** | 0.5033 |
+| AUC de entrenamiento | 0.6112 | 0.5430 |
+| Diferencia (señal de sobreajuste) | 0.023 (sana) | 0.040 (ruido sobre ruido) |
 | Baseline de una sola variable | 0.5635 | 0.4984 |
-| Aporte real sobre el baseline | **+0.0239** | +0.0014 (nulo) |
-| Brier score, sin calibrar | 0.2273 | 0.1292 |
+| Aporte real sobre el baseline | **+0.0248** | +0.0049 (nulo) |
+| Brier score, sin calibrar | 0.2229 | 0.1291 |
 | Brier score, **calibrado** | **0.2229** | 0.1292 (sin cambio) |
 | Brier de predecir siempre la tasa base | 0.2343 | 0.1291 |
-| Lift del decil superior | **1.79×** | 0.99× (nulo) |
+| Lift del decil superior | **1.79×** | 1.0× (nulo) |
+| Árboles (early stopping por logloss) | 56 | 8 |
 
 **Cómo se lee esto honestamente:** el modelo de aceptación no es un modelo espectacular en términos de AUC absoluto — pero eso es correcto, dado que el techo de estos datos es bajo (Hallazgo 1). Lo que importa es que aporta un margen real (+0.024) sobre la regla ingenua de "¿es MT o no?", que ese margen es consistente con las otras señales encontradas en el EDA (mora, antigüedad), y que la brecha entre entrenamiento y prueba es pequeña — el modelo generaliza, no memoriza. El **lift de 1.79× en el decil superior** significa algo muy concreto para el negocio: si un asesor prioriza llamar primero al 10% de clientes que el modelo rankea más alto, la tasa de conversión de ese grupo es 79% mayor que la tasa promedio. Esa es la cifra que efectivamente mueve una operación de venta, más que el AUC.
 
@@ -224,24 +225,36 @@ El **Brier score** mide qué tan bien calibradas están las probabilidades (0 es
 
 #### El modelo rankeaba bien y mentía con los números
 
-Esa última frase describía una intención que el propio pipeline no cumplía, y se descubrió mirando la pantalla: la cola mostraba "51% de probabilidad" para las ofertas de Movistar Total, cuando la tasa de aceptación **medida** sobre el historial de clientes contactados es del **69.7%**. Veinte puntos de diferencia en un número que el asesor le dice al cliente en voz alta.
+Esa última frase describía una intención que el propio pipeline no cumplía, y se descubrió mirando la pantalla en dos tandas.
 
-La causa es sutil y vale la pena nombrarla porque es una trampa clásica: el entrenamiento usaba `metric: "auc"` con early stopping. **El AUC es una métrica de orden**, mide si el modelo pone los casos positivos por encima de los negativos, y es completamente ciega a si las probabilidades tienen el valor correcto. En cuanto el ranking dejó de mejorar, el early stopping cortó — en **9 árboles**. Con una tasa de aprendizaje de 0.05, nueve árboles no alcanzan a alejar las predicciones de la tasa base (0.3746): el modelo aprendió el orden correcto (MT arriba de todo lo demás) pero nunca llegó a los valores correctos. El síntoma medible es que su Brier (0.2273) apenas le ganaba al de predecir siempre la tasa base (0.2343).
+**Primer síntoma: el valor estaba mal.** La cola mostraba "51% de probabilidad" para las ofertas de Movistar Total, cuando la tasa de aceptación **medida** sobre el historial de clientes contactados es del **69.7%**. Veinte puntos de diferencia en un número que el asesor le dice al cliente en voz alta.
 
-La corrección es una **regresión isotónica ajustada sobre el split de validación** (abril, el que ya estaba reservado para el early stopping), aplicada a la salida del modelo en el scoring. Se eligió por encima de reentrenar con otra métrica por una propiedad concreta: es **monótona**, así que no puede alterar el orden de las predicciones. El AUC de prueba queda idéntico hasta el cuarto decimal (0.5874 antes y después — el pipeline lo verifica explícitamente y esa igualdad es la prueba de que el ranking no se tocó), y solo cambian los valores. Reentrenar con `binary_logloss` habría movido también el ranking y reabierto el sobreajuste que los hiperparámetros regularizan a propósito.
+**Segundo síntoma: el valor era uno solo.** Tras corregir lo anterior con calibración, un usuario recorrió 25 páginas de la cola y todas mostraban el mismo porcentaje. No era percepción: **11,740 clientes compartían exactamente la misma probabilidad**, y en toda la planta había solo 38 valores distintos. Un ranking donde doce mil prospectos son indistinguibles no está analizando prospectos.
+
+Las dos cosas tenían la misma causa raíz, y vale la pena nombrarla porque es una trampa clásica: el entrenamiento usaba `metric: "auc"` para el early stopping. **El AUC es una métrica de orden** — mide si los positivos quedan por encima de los negativos y es ciega tanto al *valor* de la probabilidad como a su *resolución*. Se satura apenas el modelo aprende la regla gruesa (¿la oferta es MT?), así que cortaba en **9 árboles**. Nueve árboles con `learning_rate` 0.05 producen predicciones pegadas a la tasa base (de ahí el 51%) y tan pocas combinaciones de hojas que miles de clientes caen en el mismo score (de ahí la uniformidad). Las señales débiles que el EDA sí encontró —mora, antigüedad, consumo— nunca llegaban a entrar al modelo.
+
+La corrección tiene dos piezas que se reparten el trabajo:
+
+1. **El early stopping pasa a mirar `binary_logloss`**, que premia afinar la probabilidad de cada caso y no solo el orden global. El modelo entrena 56 árboles en vez de 9, y las señales débiles entran: el AUC de prueba incluso sube (0.5874 → 0.5883) y la brecha train/test sigue sana (0.023). El resultado visible es que ahora los grupos se distinguen por razones legibles — el tope de la cola (76.4%) son clientes con 148 meses de antigüedad, 1.8 días de mora y 0.07 reclamos promedio; el escalón siguiente (72.9%) tiene 102 meses, 4.1 de mora y 0.31 reclamos. Eso es el análisis de prospectos expresado en el número.
+
+2. **La isotónica sobre validación queda como garantía de honestidad del valor**, con una regla extra: ningún nivel del calibrador se sostiene con menos de **30 casos** de evidencia (el mismo umbral de "confianza baja" que usa la matriz de rebate). Sin esa regla, la isotónica pura hacía algo indefendible en la cola alta: los 20 casos de validación con mejor score aceptaron todos, y el calibrador mapeaba ese tramo a **100% literal** — "aceptación garantizada" estimada sobre 20 casos. Los niveles flacos se fusionan con su vecino, y el costo es de dos diezmilésimas de AUC (0.5883 → 0.5881 calibrado, por los empates que crea la fusión): el precio de negarse a prometer certezas.
 
 El resultado, contra las tasas reales del historial:
 
-| | Antes | Después | Tasa real medida |
+| | Con el defecto | Ahora | Tasa real medida |
 |---|---|---|---|
-| Ofertas Movistar Total | 49.5% | **69.5%** | 69.7% |
+| Ofertas Movistar Total (promedio) | 49.5% | **69.5%** | 69.7% |
 | Resto del portafolio | 36.2% | **34.3%** | 34.1% |
+| Valores distintos de probabilidad (recomendación #1) | 38 | **111** | — |
+| Clientes empatados en el valor máximo | 11,740 | **958** | — |
 
-El calibrador se guarda como JSON (`pipeline/artifacts/calibrador_aceptacion.json`) y no como un binario serializado, deliberadamente: sus puntos de quiebre se leen a ojo, así que el mapeo "0.5068 → 0.697" queda auditable en vez de escondido dentro de un pickle atado a una versión de scikit-learn.
+El calibrador se guarda como JSON (`pipeline/artifacts/calibrador_aceptacion.json`) y no como un binario serializado, deliberadamente: sus puntos de quiebre se leen a ojo, así que el mapeo score→tasa queda auditable en vez de escondido dentro de un pickle atado a una versión de scikit-learn.
 
-**El modelo de contactabilidad no se calibra**, y la razón es interesante: al no tener ninguna señal, sus predicciones ya se quedaron pegadas a la tasa base (0.843–0.853 contra un 0.848 real), o sea que está bien calibrado por accidente. Aplicarle la isotónica no movió su Brier ni una diezmilésima (0.1292 antes y después), lo que confirma el diagnóstico del Hallazgo 2 desde otro ángulo.
+**El modelo de contactabilidad no se calibra**, y la razón es interesante: al no tener ninguna señal, sus predicciones ya se quedaron pegadas a la tasa base (~0.848 real), o sea que está bien calibrado por accidente. Aplicarle la isotónica no movió su Brier (0.1291 → 0.1292), lo que confirma el diagnóstico del Hallazgo 2 desde otro ángulo.
 
-Un efecto secundario que vale documentar: al ensancharse la separación entre MT (0.69) y el resto (0.34), unos 270 clientes que tenían su oferta de blindaje en la posición 7 del ranking pasaron a entrar en el top 6 que el pipeline persiste (`TOP_N` en `pipeline/src/scoring.py`), así que la cola con foco MT creció de 56,894 a 57,164 clientes. No es una regresión: son clientes cuya mejor oportunidad de convergencia antes quedaba fuera del corte.
+**El límite honesto**: aún quedan ~7,000 clientes que comparten el 72.9% exacto. No es un defecto a corregir — son clientes que, a la resolución que estos datos sintéticos permiten, tienen el mismo perfil de riesgo, y asignarles números distintos sería fabricar precisión. Lo que separa a dos prospectos con la misma probabilidad es el resto del análisis: su `gap_a_mt`, su ahorro concreto en soles, su persona y su historial — que es exactamente lo que la cola usa para desempatar y lo que el cockpit muestra al abrirlos.
+
+Un efecto secundario que vale documentar: al ensancharse la separación entre MT (0.69) y el resto (0.34), varios cientos de clientes que tenían su oferta de blindaje fuera del top 6 que el pipeline persiste (`TOP_N` en `pipeline/src/scoring.py`) pasaron a entrar en él, así que la cola con foco MT creció de 56,894 a 57,304 clientes. No es una regresión: son clientes cuya mejor oportunidad de convergencia antes quedaba fuera del corte.
 
 ### 5.6 — Segmentación: clustering + capa de reglas
 
@@ -364,7 +377,7 @@ La interfaz se organizó en tres pantallas, cada una respondiendo a un momento d
 
 **Cola de atención (`/`)** — la bandeja de trabajo. Es la pantalla de entrada: qué clientes atender primero, ordenados por valor esperado de la mejor oportunidad, con filtros por foco (blindaje MT vs. todo el portafolio), canal, y un filtro específico para "nunca se le ofreció MT" — que ataca directamente la cobertura perdida (los clientes elegibles que el sistema nunca les presentó la oferta). Incluye un buscador por ID de cliente, porque en Call In o Tienda el cliente llega primero y el asesor tiene que ubicarlo, no esperar a que aparezca en la cola.
 
-La cola está **paginada de a 50 y muestra siempre el total** ("Mostrando 1–50 de 57,164"). Las dos cosas se agregaron por el mismo motivo, y no es de comodidad: la primera versión mostraba 50 clientes fijos, sin paginación y sin decir cuántos había detrás. Como los primeros puestos de un ranking son por definición parecidos entre sí —y con las probabilidades sin calibrar eran directamente idénticos— la pantalla se leía como un dataset recortado o inventado, en vez de como el techo de una cola de 57 mil. Poder avanzar y ver que en la página 800 las cifras son otras es lo que demuestra que los datos son reales.
+La cola está **paginada de a 50 y muestra siempre el total** ("Mostrando 1–50 de 57,304"). Las dos cosas se agregaron por el mismo motivo, y no es de comodidad: la primera versión mostraba 50 clientes fijos, sin paginación y sin decir cuántos había detrás. Como los primeros puestos de un ranking son por definición parecidos entre sí —y con las probabilidades sin calibrar eran directamente idénticos— la pantalla se leía como un dataset recortado o inventado, en vez de como el techo de una cola de 57 mil. Poder avanzar y ver que en la página 800 las cifras son otras es lo que demuestra que los datos son reales.
 
 Paginar obligó además a cerrar un bug latente: el orden de la cola no era **total**. Hay grupos de una docena de clientes con las tres claves de ordenamiento idénticas, y SQL no garantiza en qué orden los devuelve; con un `LIMIT` fijo daba igual, pero paginando sobre un orden inestable un cliente puede aparecer en dos páginas o no aparecer en ninguna. El `ORDER BY` termina ahora desempatando por `cliente_id`.
 

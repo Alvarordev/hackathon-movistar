@@ -50,9 +50,17 @@ VALID_DESDE = "2026-04-01"  # abril se reserva para early stopping
 # cliente, los defaults memorizan al cliente: subían el AUC de train a 0.74
 # dejando el de test en 0.58. Como al asesor le mostramos la probabilidad en
 # pantalla, una probabilidad mal calibrada es peor que no mostrarla.
+#
+# El early stopping mira logloss, NO auc, y la diferencia se vio en pantalla:
+# el AUC es una métrica de orden que se satura apenas el modelo aprende la
+# regla gruesa (¿es MT?) — cortaba en 9 árboles, y 9 árboles producen tan
+# pocas combinaciones de hojas que 11,740 clientes compartían exactamente la
+# misma probabilidad. El logloss premia afinar la probabilidad de cada caso,
+# así que deja entrenar hasta que las señales débiles que el EDA encontró
+# (mora, antigüedad, consumo) entren al score y diferencien clientes.
 PARAMS = {
     "objective": "binary",
-    "metric": "auc",
+    "metric": "binary_logloss",
     "verbosity": -1,
     "seed": 42,
     "learning_rate": 0.05,
@@ -98,32 +106,79 @@ def _auc_baseline_mt(df_tr: pd.DataFrame, df_te: pd.DataFrame,
     return float(roc_auc_score(y_te, score))
 
 
-def _calibrar(p_valid: np.ndarray, y_valid: np.ndarray) -> IsotonicRegression:
-    """Calibración isotónica ajustada sobre el split de validación.
+N_MIN_CALIBRACION = 30  # mismo umbral que la matriz de rebate: n<30 es anécdota
 
-    Hace falta porque el early stopping mira AUC, que es una métrica de ORDEN y
-    es ciega a la calibración: corta apenas el ranking deja de mejorar y deja
-    las probabilidades pegadas a la tasa base. Medido en este dataset, el modelo
-    predecía 0.495 para ofertas MT cuando la tasa real de aceptación es 0.697 —
-    veinte puntos de diferencia en un número que el asesor le dice al cliente en
-    voz alta.
 
-    Isotónica y no reentrenar con otra métrica porque es MONÓTONA: no puede
-    alterar el orden de las predicciones, así que el AUC y el ranking de la cola
-    quedan intactos. Solo corrige los valores.
+Calibrador = tuple[np.ndarray, np.ndarray]
+
+
+def _calibrar(p_valid: np.ndarray, y_valid: np.ndarray) -> Calibrador:
+    """Calibración isotónica sobre validación, con soporte mínimo por nivel.
+
+    La isotónica corrige el defecto que dejó el modelo crudo (predicciones
+    pegadas a la tasa base: 0.495 para MT contra 0.697 real), y es MONÓTONA:
+    no altera el orden del ranking, solo los valores.
+
+    El paso extra —fusionar niveles con menos de N_MIN_CALIBRACION casos de
+    validación con su vecino inferior— existe porque la isotónica pura hace
+    algo indefendible en las colas: si los 20 casos con score más alto de
+    abril aceptaron todos, mapea ese tramo a 1.0 literal, y la pantalla le
+    diría al asesor "100% de probabilidad". Una tasa estimada sobre 20 casos
+    no es evidencia de certeza; es el mismo criterio de la matriz de rebate
+    (confianza baja bajo n=30), aplicado donde más daño hace.
+
+    La fusión promedia niveles ADYACENTES ponderando por n, así que la
+    monotonía se conserva. Devuelve los puntos (x, y) listos para np.interp.
 
     Se ajusta sobre abril (validación), nunca sobre train —donde el modelo ya
-    vio los datos y sus predicciones son optimistas— ni sobre test, que tiene
-    que quedar limpio para la evaluación honesta.
+    vio los datos— ni sobre test, que queda limpio para la evaluación honesta.
     """
     iso = IsotonicRegression(out_of_bounds="clip")
     iso.fit(p_valid, y_valid)
-    return iso
+
+    # Soporte de cada nivel de salida: cuántos casos de validación caen en él
+    # y cuántos de ellos aceptaron. Los niveles vienen ordenados ascendente.
+    niveles, inversa, counts = np.unique(
+        iso.predict(p_valid), return_inverse=True, return_counts=True
+    )
+    suma_y = np.bincount(inversa, weights=y_valid.astype(float))
+
+    # Bloques {niveles originales, n, aceptados}; fusionar el que no llega al
+    # mínimo con su vecino inferior (el primero, con el superior). Promediar
+    # bloques ADYACENTES ponderando por n conserva la monotonía.
+    bloques = [
+        {"idx": [i], "n": int(n), "s": float(s)}
+        for i, (n, s) in enumerate(zip(counts, suma_y))
+    ]
+    pos = 0
+    while pos < len(bloques) and len(bloques) > 1:
+        if bloques[pos]["n"] >= N_MIN_CALIBRACION:
+            pos += 1
+            continue
+        vecino = pos - 1 if pos > 0 else pos + 1
+        destino, fuente = min(pos, vecino), max(pos, vecino)
+        bloques[destino] = {
+            "idx": bloques[destino]["idx"] + bloques[fuente]["idx"],
+            "n": bloques[destino]["n"] + bloques[fuente]["n"],
+            "s": bloques[destino]["s"] + bloques[fuente]["s"],
+        }
+        del bloques[fuente]
+        pos = max(destino, 0)
+
+    # Tasa fusionada para cada nivel original.
+    tasa_nivel = np.empty(len(niveles), dtype=float)
+    for b in bloques:
+        tasa_nivel[b["idx"]] = b["s"] / b["n"] if b["n"] else 0.0
+
+    # Mapear cada umbral de score crudo del ajuste isotónico a su tasa
+    # fusionada. (X_thresholds_, y) queda no-decreciente: listo para np.interp.
+    indice_nivel = np.searchsorted(niveles, iso.y_thresholds_)
+    return np.asarray(iso.X_thresholds_, dtype=float), tasa_nivel[indice_nivel]
 
 
 def _entrenar(
     df: pd.DataFrame, features: list[str], y: pd.Series, nombre: str
-) -> tuple[lgb.Booster, IsotonicRegression, dict]:
+) -> tuple[lgb.Booster, Calibrador, dict]:
     X = dataset.matriz_X(df, features)
     _auditar_leakage(X, nombre)
 
@@ -152,8 +207,8 @@ def _entrenar(
     p_va = booster.predict(Xva, num_iteration=mejor)
     p_te = booster.predict(Xte, num_iteration=mejor)
 
-    calibrador = _calibrar(p_va, yva.to_numpy())
-    p_te_cal = calibrador.predict(p_te)
+    cal_x, cal_y = _calibrar(p_va, yva.to_numpy())
+    p_te_cal = np.interp(p_te, cal_x, cal_y)
 
     auc_tr = roc_auc_score(ytr, p_tr)
     auc_te = roc_auc_score(yte, p_te)
@@ -211,7 +266,7 @@ def _entrenar(
             "test_desde": TEST_DESDE,
         },
     }
-    return booster, calibrador, metricas
+    return booster, (cal_x, cal_y), metricas
 
 
 def main() -> None:
@@ -278,13 +333,16 @@ def main() -> None:
             {
                 "metodo": "isotonic",
                 "ajustado_sobre": "validacion (abril 2026)",
+                "n_min_por_nivel": N_MIN_CALIBRACION,
                 "nota": (
                     "Mapea la salida cruda del modelo a la tasa de aceptación "
                     "observada. Es monótona: no altera el ranking, solo los "
-                    "valores. Aplicar con np.interp(p, x, y)."
+                    "valores. Niveles con menos de n_min casos de validación "
+                    "se fusionan con el vecino: una tasa medida sobre 20 casos "
+                    "no justifica decir 100%. Aplicar con np.interp(p, x, y)."
                 ),
-                "x": [round(float(v), 6) for v in cal_a.X_thresholds_],
-                "y": [round(float(v), 6) for v in cal_a.y_thresholds_],
+                "x": [round(float(v), 6) for v in cal_a[0]],
+                "y": [round(float(v), 6) for v in cal_a[1]],
             },
             indent=2,
         ),

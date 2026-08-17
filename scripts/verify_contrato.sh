@@ -99,8 +99,15 @@ check "prioridades excluye abstenciones"         "$BASE/prioridades?limit=200" \
   "'CLI000001' not in [c['cliente_id'] for c in d['clientes']]"
 check "cola nunca_ofertados sirve cobertura perdida" "$BASE/prioridades?solo_nunca_ofertados=true&limit=10" \
   "d['n']>0 and all(c['nunca_ofrecido_mt'] for c in d['clientes'])"
-check "cola ordenada por valor esperado"         "$BASE/prioridades?limit=50" \
-  "all(d['clientes'][i]['valor_esperado']>=d['clientes'][i+1]['valor_esperado'] for i in range(len(d['clientes'])-1))"
+# El orden prometido NO es VE exacto: es VE agrupado a 2 decimales (diferencias
+# menores están bajo la resolución del modelo) y, dentro del empate, el ahorro.
+check "cola ordenada por VE agrupado, luego ahorro" "$BASE/prioridades?limit=50" \
+  "all(
+      round(d['clientes'][i]['valor_esperado'],2) > round(d['clientes'][i+1]['valor_esperado'],2)
+      or (round(d['clientes'][i]['valor_esperado'],2) == round(d['clientes'][i+1]['valor_esperado'],2)
+          and (d['clientes'][i]['ahorro_soles'] if d['clientes'][i]['ahorro_soles'] is not None else -1e9)
+              >= (d['clientes'][i+1]['ahorro_soles'] if d['clientes'][i+1]['ahorro_soles'] is not None else -1e9))
+      for i in range(len(d['clientes'])-1))"
 check_status "foco invalido da 400" "$BASE/prioridades?foco=churn" 400
 
 echo

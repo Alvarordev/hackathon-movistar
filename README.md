@@ -79,7 +79,7 @@ ocurren:
 Ofrece Movistar Total Básico (OF020).
 - Precio: S/ 149.90 al mes.
 - Ahorro real: S/ 59.90 mensuales respecto a lo que paga hoy.
-- Probabilidad de aceptación: 51%.
+- Probabilidad de aceptación: 73%.
 ```
 
 Los cinco diálogos canónicos del asesor —qué ofrecer y por qué, cambio de tier,
@@ -191,7 +191,7 @@ Eso cambió tres decisiones de diseño, y las tres están documentadas en
    real: un rechazo previo por `mal_momento`.
 
 Preferimos una regla honesta a un modelo decorativo. El AUC de test del Modelo A
-es **0.5874** contra un baseline de una sola variable de **0.5635**: cerca del
+es **0.5883** contra un baseline de una sola variable de **0.5635**: cerca del
 techo que estos datos permiten. Un 0.85 acá sería leakage, y el pipeline aborta
 si el AUC supera 0.90.
 
@@ -252,6 +252,22 @@ web, 120 MB Postgres).
    [publicar-imagenes.yml](.github/workflows/publicar-imagenes.yml), que
    construye y publica en GHCR `copiloto-nbo-web` (318 MB) y
    `copiloto-nbo-db` (471 MB).
+
+   > **Si el push cambió `deploy/nbo.sql.gz`, el redeploy no alcanza.**
+   > Postgres solo ejecuta el seed cuando su volumen está vacío, así que un
+   > dump nuevo con el volumen viejo se ignora en silencio: la web se
+   > actualiza y la base no, y la pantalla queda mostrando cifras de la
+   > versión anterior (nos pasó). En el VPS:
+   >
+   > ```bash
+   > cd /etc/dokploy/compose/<app>/code
+   > docker compose --env-file .env -f docker-compose.prod.yml down
+   > docker volume rm <app>_pgdata
+   > docker compose --env-file .env -f docker-compose.prod.yml up -d
+   > ```
+   >
+   > No se pierde nada: la base es 100% derivada del pipeline y la app solo
+   > hace SELECT.
 2. En Dokploy, una aplicación de tipo **Docker Compose** apuntando a este repo
    con el archivo `docker-compose.prod.yml`.
 3. Dominio sobre el servicio `web`, puerto 3000, con HTTPS de Let's Encrypt
