@@ -53,7 +53,15 @@ export const tools = {
       "Recomendaciones de oferta rankeadas por valor esperado " +
       "(prob_contacto x prob_aceptacion), con drivers explicativos, ahorro en " +
       "soles y canal sugerido. ES LA ÚNICA FUENTE de qué ofrecer. Si devuelve " +
-      "abstenerse=true, el cliente no es candidato a venta.",
+      "abstenerse=true, el cliente no es candidato a venta. Revisa siempre " +
+      "estos tres campos de la recomendación antes de armar el argumento: " +
+      "accion='recordatorio' significa que el cliente YA aceptó esa oferta y " +
+      "la contratación quedó pendiente — el approach es retomar y cerrar, no " +
+      "vender de nuevo. es_downgrade_datos=true significa que la oferta le da " +
+      "menos GB de los que el cliente realmente consume — adviértelo, nunca " +
+      "la presentes como ventaja. n_rechazos_previos > 0 significa que el " +
+      "cliente ya rechazó esa misma oferta antes (el ranking ya la penaliza " +
+      "por eso); usa get_journey para saber el motivo y ajustar el argumento.",
     inputSchema: z.object({
       cliente_id: clienteId,
       canal: z
@@ -134,8 +142,11 @@ export const tools = {
       "valor esperado. Usar cuando el asesor pregunta 'a quién llamo ahora' " +
       "o pide una lista de campaña. Con foco='mt' (default) devuelve la mejor " +
       "oportunidad de blindaje de cada cliente; solo_nunca_ofertados=true " +
-      "prioriza a los elegibles que jamás recibieron una oferta MT. Los " +
-      "clientes en abstención nunca aparecen.",
+      "prioriza a los elegibles que jamás recibieron una oferta MT. " +
+      "accion='recordatorio' filtra a solo clientes que ya aceptaron MT y " +
+      "tienen la contratación pendiente de cerrar (el lead más caliente); " +
+      "accion='oferta' filtra a solo ventas nuevas. Los clientes en " +
+      "abstención nunca aparecen.",
     inputSchema: z.object({
       foco: z.enum(["mt", "todos"]).optional(),
       canal: z
@@ -143,13 +154,15 @@ export const tools = {
         .optional()
         .describe("Filtrar por canal sugerido, p. ej. Call Out"),
       solo_nunca_ofertados: z.boolean().optional(),
+      accion: z.enum(["oferta", "recordatorio"]).optional(),
       limit: z.number().int().min(1).max(10).optional(),
     }),
-    execute: async ({ foco, canal, solo_nunca_ofertados, limit }) =>
+    execute: async ({ foco, canal, solo_nunca_ofertados, accion, limit }) =>
       getPrioridades({
         foco,
         canal,
         soloNuncaOfertados: solo_nunca_ofertados,
+        accion,
         limit: limit ?? 5,
       }),
   }),

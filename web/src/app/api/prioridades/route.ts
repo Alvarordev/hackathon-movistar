@@ -8,6 +8,7 @@ export const GET = handler(async (req: Request) => {
   const foco = url.searchParams.get("foco") ?? "mt";
   const canal = url.searchParams.get("canal") ?? undefined;
   const soloNunca = url.searchParams.get("solo_nunca_ofertados") === "true";
+  const accion = url.searchParams.get("accion") ?? undefined;
   const limitRaw = url.searchParams.get("limit");
   const offsetRaw = url.searchParams.get("offset");
 
@@ -16,6 +17,9 @@ export const GET = handler(async (req: Request) => {
   }
   if (canal && !CANALES.includes(canal as never)) {
     return fail("parametro_invalido", `canal debe ser uno de: ${CANALES.join(", ")}`);
+  }
+  if (accion && accion !== "oferta" && accion !== "recordatorio") {
+    return fail("parametro_invalido", "accion debe ser 'oferta' o 'recordatorio'");
   }
   const limit = limitRaw ? Number(limitRaw) : undefined;
   if (limitRaw && (!Number.isInteger(limit) || limit! < 1)) {
@@ -31,6 +35,7 @@ export const GET = handler(async (req: Request) => {
       foco,
       canal,
       soloNuncaOfertados: soloNunca,
+      accion: accion as "oferta" | "recordatorio" | undefined,
       limit,
       offset,
     }),

@@ -104,6 +104,17 @@ export interface Recomendacion {
   avanza_a_mt: boolean;
   drivers: Driver[];
   por_canal: ProbaCanal[];
+  /** "recordatorio": el cliente ya aceptó esta oferta y quedó sin completar
+   *  la contratación — el approach es de cierre, no de venta nueva. */
+  accion: "oferta" | "recordatorio";
+  fecha_aceptacion_previa: string | null;
+  /** La oferta le da menos GB de los que el cliente realmente consume. */
+  es_downgrade_datos: boolean;
+  n_rechazos_previos: number;
+  fecha_ultimo_rechazo: string | null;
+  /** valor_esperado descontado por rechazos previos de esta misma oferta;
+   *  es lo que decide el orden. */
+  valor_esperado_ajustado: number;
 }
 
 export interface RutaMt {
@@ -153,6 +164,13 @@ export interface Journey {
     veces_ofrecido_mt: number;
     nunca_ofrecido_mt: boolean;
     motivo_rechazo_dominante: Motivo | null;
+    /** El cliente aceptó una oferta MT en el historial pero la contratación
+     *  nunca se completó (sigue sin ser Movistar Total). */
+    mt_aceptado_pendiente: {
+      oferta_id: string;
+      nombre_oferta: string;
+      fecha: string;
+    } | null;
   };
   eventos: EventoJourney[];
   fricciones: Array<Record<string, unknown>>;
@@ -196,12 +214,16 @@ export interface ClientePrioridad {
   tiene_ruta_mt: boolean;
   ahorro_soles_proyectado: number | null;
   nunca_ofrecido_mt: boolean;
+  accion: "oferta" | "recordatorio";
+  fecha_aceptacion_previa: string | null;
+  es_downgrade_datos: boolean;
 }
 
 export interface Prioridades {
   foco: "mt" | "todos";
   canal: Canal | null;
   solo_nunca_ofertados: boolean;
+  accion: "oferta" | "recordatorio" | null;
   /** Clientes en la cola con estos filtros. `n` es solo los de esta página. */
   total: number;
   limit: number;

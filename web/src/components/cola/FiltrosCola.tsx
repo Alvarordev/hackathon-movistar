@@ -11,16 +11,23 @@ interface Props {
   foco: string;
   canal?: string;
   soloNunca: boolean;
+  accion?: string;
 }
 
-export function FiltrosCola({ foco, canal, soloNunca }: Props) {
+export function FiltrosCola({ foco, canal, soloNunca, accion }: Props) {
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   const [busqueda, setBusqueda] = useState("");
 
   function aplicar(cambios: Record<string, string | undefined>) {
     const sp = new URLSearchParams();
-    const estado = { foco, canal, solo_nunca_ofertados: soloNunca ? "true" : undefined, ...cambios };
+    const estado = {
+      foco,
+      canal,
+      solo_nunca_ofertados: soloNunca ? "true" : undefined,
+      accion,
+      ...cambios,
+    };
     for (const [k, v] of Object.entries(estado)) {
       if (v) sp.set(k, v);
     }
@@ -67,6 +74,17 @@ export function FiltrosCola({ foco, canal, soloNunca }: Props) {
         title="Clientes elegibles a los que nunca se les ofreció Movistar Total"
       >
         Nunca se le ofreció MT
+      </Button>
+
+      <Button
+        variante={accion === "recordatorio" ? "primario" : "outline"}
+        onClick={() =>
+          aplicar({ accion: accion === "recordatorio" ? undefined : "recordatorio" })
+        }
+        aria-pressed={accion === "recordatorio"}
+        title="Clientes que ya aceptaron Movistar Total y quedaron con la contratación pendiente"
+      >
+        Seguimientos pendientes
       </Button>
 
       {pendiente ? (

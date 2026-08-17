@@ -26,6 +26,9 @@ def main() -> None:
             "momento_sugerido", "momento_origen", "prob_contacto",
             "prob_aceptacion", "valor_esperado", "ahorro_soles",
             "ahorro_pct_real", "avanza_a_mt", "drivers", "por_canal",
+            "accion", "fecha_aceptacion_previa", "es_downgrade_datos",
+            "n_rechazos_previos", "fecha_ultimo_rechazo",
+            "valor_esperado_ajustado",
         ]
         copy_df(conn, scores[cols], "nbo_scores")
 

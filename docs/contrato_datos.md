@@ -91,15 +91,20 @@ Next Best Offer. Ranking sobre las ofertas elegibles del catálogo (**las 22, no
 
 `valor_esperado = prob_contacto × prob_aceptacion`. El ranking es por `valor_esperado`, no por probabilidad de aceptación sola: de nada sirve una oferta que el cliente aceptaría si no se le puede contactar.
 
-**Política de ranking (blindaje).** El modelo no distingue entre ofertas no-MT:
-los empates de valor esperado son la norma, y con AUC 0.587 las diferencias
-menores a 0.01 están por debajo de su resolución. Dentro de ese empate técnico
-decide una política de negocio declarada, en este orden: (1) `avanza_a_mt` —
-la oferta es MT o es el puente que cierra el gap del cliente; (2) nunca un
-downgrade de plan como jugada proactiva (baja ARPU); (3) valor esperado exacto,
-ahorro, precio. El campo `avanza_a_mt` viene en cada recomendación para que la
-UI pueda mostrar de dónde sale el orden. La política solo rompe empates: si el
-modelo ve una diferencia real (≥ 0.01 de VE), el modelo gana.
+**Política de ranking (blindaje + historial).** El modelo no distingue entre
+ofertas no-MT: los empates de valor esperado son la norma, y con AUC 0.587 las
+diferencias menores a 0.01 están por debajo de su resolución. El orden:
+(0) `accion = "recordatorio"` — el cliente ya aceptó esta oferta y la
+contratación quedó pendiente, siempre rank 1; (1) `valor_esperado_ajustado`
+agrupado a 2 decimales — el VE del modelo descontado por rechazos previos de
+esa misma oferta a ese mismo cliente: donde el modelo ve diferencia real, el
+modelo manda, y un tier ya rechazado por caro baja de grupo; (2) dentro del
+empate técnico pierde primero el downgrade, de precio o de **datos**
+(`es_downgrade_datos`: la oferta le da menos GB de los que el cliente
+realmente consume, con margen) — pero pierde dentro de su empate, no contra
+toda la lista; (3) `avanza_a_mt` — la oferta es MT o es el puente que cierra
+el gap del cliente; (4) VE ajustado exacto, ahorro, precio. Detalle en
+[como_funciona.md](como_funciona.md) §5.9 y 5.9 bis.
 
 Query params opcionales: `?canal=Digital` (fuerza el canal, para el escenario "el cliente ya está en la tienda"), `?limit=5`.
 
@@ -145,6 +150,23 @@ Query params opcionales: `?canal=Digital` (fuerza el canal, para el escenario "e
       "ahorro_soles": 24.18,           // gasto_actual_total − precio_mensual. null si no aplica
       "ahorro_pct_real": 0.113,        // calculado, NO el ahorro_pct ilustrativo del catálogo
       "avanza_a_mt": true,             // la oferta es MT o es el puente del gap de este cliente
+
+      // Historial: si "recordatorio", el cliente YA aceptó esta oferta y la
+      // contratación quedó pendiente — el approach es cerrar, no vender de
+      // nuevo. fecha_aceptacion_previa es null cuando accion = "oferta".
+      "accion": "oferta",
+      "fecha_aceptacion_previa": null,
+
+      // La oferta le da menos GB de los que el cliente realmente consume
+      // (con margen de 20%). No se excluye, se despriorizó en el ranking.
+      "es_downgrade_datos": false,
+
+      // Cuántas veces y cuándo el cliente rechazó ESTA oferta antes.
+      // valor_esperado_ajustado ya viene descontado por esto; es lo que
+      // decide el orden (valor_esperado es el crudo del modelo).
+      "n_rechazos_previos": 0,
+      "fecha_ultimo_rechazo": null,
+      "valor_esperado_ajustado": 0.5834,
 
       // Top contribuciones de LightGBM (pred_contrib), ya traducidas a
       // lenguaje de asesor. `a_favor` es el signo de la contribución: la UI
@@ -198,8 +220,15 @@ y campañas.
   recomendación #1 sin filtro.
 - `solo_nunca_ofertados=true`: solo clientes que jamás recibieron una oferta
   MT — ataca directamente la **cobertura perdida** (12.6% de los elegibles).
+- `accion=recordatorio`: solo clientes que ya aceptaron MT y tienen la
+  contratación pendiente de cerrar (ver [como_funciona.md](como_funciona.md)
+  §5.9 bis); `accion=oferta` filtra a solo ventas nuevas.
 - Los clientes en abstención **no aparecen**: llamarlos para vender es el
   error que el motor existe para evitar.
+- El orden antepone `accion = "recordatorio"` a cualquier otro criterio —
+  cerrar una contratación ya aceptada vale más que abrir una venta nueva —
+  y luego usa `valor_esperado_ajustado` (descontado por rechazos previos),
+  no el `valor_esperado` crudo.
 - `limit` máximo 200 (default 25). `offset` entero ≥ 0 (default 0) para paginar.
 - `total` es cuántos clientes hay en la cola con esos filtros; `n` es cuántos
   trae esta página. Sin `total` no hay forma de saber que detrás de las 50 filas
@@ -224,6 +253,8 @@ y campañas.
       "rank": 1, "valor_esperado": 0.6498, "prob_aceptacion": 0.7636,
       "ahorro_soles": 109.90, "canal_sugerido": "Call In",
       "nunca_ofrecido_mt": true,
+      "accion": "oferta", "fecha_aceptacion_previa": null,
+      "es_downgrade_datos": false,
       "tiene_ruta_mt": false, "ahorro_soles_proyectado": null
     }
   ]
@@ -304,7 +335,11 @@ Línea de tiempo reconstruida del historial real, cruzada con fricciones.
   "resumen": {
     "n_ofrecimientos": 6, "n_aceptados": 1, "n_rechazados": 3, "n_no_contactado": 2,
     "veces_ofrecido_mt": 2, "nunca_ofrecido_mt": false,
-    "motivo_rechazo_dominante": "precio"
+    "motivo_rechazo_dominante": "precio",
+    // El cliente aceptó una oferta MT en el historial pero el snapshot lo
+    // sigue marcando como no-MT: la contratación nunca se completó (ver
+    // como_funciona.md §5.9 bis). null si no aplica o si ya es MT.
+    "mt_aceptado_pendiente": null
   },
   "eventos": [
     { "ofrecimiento_id": "OFR0000123", "fecha": "2026-01-10",

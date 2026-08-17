@@ -73,6 +73,7 @@ export const api = {
       foco?: string;
       canal?: string;
       solo_nunca_ofertados?: boolean;
+      accion?: string;
       limit?: number;
       offset?: number;
     } = {},

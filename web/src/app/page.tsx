@@ -18,6 +18,7 @@ export default async function ColaPage({ searchParams }: Props) {
   const foco = sp.foco === "todos" ? "todos" : "mt";
   const canal = CANALES.includes(sp.canal as never) ? sp.canal : undefined;
   const soloNunca = sp.solo_nunca_ofertados === "true";
+  const accion = sp.accion === "recordatorio" ? "recordatorio" : undefined;
 
   const POR_PAGINA = 50;
   const pagina = Math.max(1, Number(sp.pagina) || 1);
@@ -29,6 +30,7 @@ export default async function ColaPage({ searchParams }: Props) {
       foco,
       canal,
       solo_nunca_ofertados: soloNunca,
+      accion,
       limit: POR_PAGINA,
       offset: (pagina - 1) * POR_PAGINA,
     });
@@ -62,6 +64,7 @@ export default async function ColaPage({ searchParams }: Props) {
         foco={foco}
         canal={canal}
         soloNunca={soloNunca}
+        accion={accion}
       />
 
       {error ? (

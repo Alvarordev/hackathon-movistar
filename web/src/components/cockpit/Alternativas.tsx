@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Layers, Shield } from "lucide-react";
+import { AlertTriangle, ChevronDown, History, Layers, Shield } from "lucide-react";
 
 import { Badge, Panel, TituloPanel } from "@/components/ui/Base";
 import { Button } from "@/components/ui/Button";
@@ -56,6 +56,18 @@ export function Alternativas({
                     </span>
                     {rec.avanza_a_mt ? (
                       <Shield size={11} className="shrink-0 text-acento" />
+                    ) : null}
+                    {rec.es_downgrade_datos ? (
+                      <span title="Menos GB de los que el cliente usa/tiene hoy">
+                        <AlertTriangle size={11} className="shrink-0 text-alerta" />
+                      </span>
+                    ) : null}
+                    {rec.n_rechazos_previos > 0 ? (
+                      <span
+                        title={`Rechazada ${rec.n_rechazos_previos} veces antes`}
+                      >
+                        <History size={11} className="shrink-0 text-tinta-3" />
+                      </span>
                     ) : null}
                   </span>
                   <span className="tabular block text-etiqueta text-tinta-3">

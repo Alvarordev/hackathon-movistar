@@ -1,7 +1,7 @@
-import { Radio, Shield, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, History, Radio, Shield, TrendingDown, TrendingUp } from "lucide-react";
 
 import { Badge, BarraProb, Origen } from "@/components/ui/Base";
-import { etiquetaOrigen, pct, soles } from "@/lib/api";
+import { etiquetaOrigen, fecha, pct, soles } from "@/lib/api";
 import type { Recomendacion } from "@/lib/tipos";
 
 /**
@@ -10,6 +10,7 @@ import type { Recomendacion } from "@/lib/tipos";
  * unidad, no como decimales sueltos.
  */
 export function CardOferta({ rec }: { rec: Recomendacion }) {
+  const esRecordatorio = rec.accion === "recordatorio";
   const ahorra = rec.ahorro_soles !== null && rec.ahorro_soles > 0;
   const cuesta = rec.ahorro_soles !== null && rec.ahorro_soles < 0;
   // `a_favor` viene del signo de la contribución del modelo. Se tolera su
@@ -22,7 +23,9 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-borde p-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge tono="acento">Recomendación #1</Badge>
+            <Badge tono={esRecordatorio ? "aviso" : "acento"}>
+              {esRecordatorio ? "Seguimiento" : "Recomendación #1"}
+            </Badge>
             {rec.avanza_a_mt ? (
               <Badge
                 tono="acento"
@@ -70,6 +73,29 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
         ) : null}
       </header>
 
+      {esRecordatorio ? (
+        <div className="flex items-start gap-2 border-b border-aviso-borde bg-aviso-suave px-4 py-2.5">
+          <History size={14} className="mt-0.5 shrink-0 text-aviso" />
+          <p className="text-dato leading-relaxed text-tinta-2">
+            Este cliente ya aceptó esta oferta
+            {rec.fecha_aceptacion_previa
+              ? ` el ${fecha(rec.fecha_aceptacion_previa)}`
+              : ""}{" "}
+            y la contratación quedó pendiente. Retomar y cerrar, no re-vender.
+          </p>
+        </div>
+      ) : null}
+
+      {rec.es_downgrade_datos ? (
+        <div className="flex items-start gap-2 border-b border-alerta-borde bg-alerta-suave px-4 py-2.5">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-alerta" />
+          <p className="text-dato leading-relaxed text-tinta-2">
+            Ojo: incluye menos GB de los que el cliente usa hoy
+            {rec.gb_incluidos ? ` (${rec.gb_incluidos} GB)` : ""}.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 p-4 sm:grid-cols-2">
         <div className="flex flex-col gap-3">
           <BarraProb
@@ -97,6 +123,20 @@ export function CardOferta({ rec }: { rec: Recomendacion }) {
               <p className="text-dato leading-relaxed text-tinta-2">
                 {rec.momento_sugerido}
               </p>
+            </div>
+          ) : null}
+
+          {rec.n_rechazos_previos > 0 ? (
+            <div className="flex items-start gap-2 text-dato text-tinta-3">
+              <History size={13} className="mt-0.5 shrink-0" />
+              <span>
+                Rechazada {rec.n_rechazos_previos}{" "}
+                {rec.n_rechazos_previos === 1 ? "vez" : "veces"} antes
+                {rec.fecha_ultimo_rechazo
+                  ? ` (última: ${fecha(rec.fecha_ultimo_rechazo)})`
+                  : ""}{" "}
+                — el ranking ya lo descuenta.
+              </span>
             </div>
           ) : null}
         </div>

@@ -125,6 +125,9 @@ const SQL_NBO = `
          s.momento_sugerido, s.momento_origen, s.avanza_a_mt,
          s.prob_contacto, s.prob_aceptacion, s.valor_esperado,
          s.ahorro_soles, s.ahorro_pct_real, s.drivers, s.por_canal,
+         s.accion, s.fecha_aceptacion_previa, s.es_downgrade_datos,
+         s.n_rechazos_previos, s.fecha_ultimo_rechazo,
+         s.valor_esperado_ajustado,
          o.nombre_oferta, o.tipo_oferta, o.descripcion_corta,
          o.precio_mensual, o.es_movistar_total, o.gb_incluidos, o.gb_ilimitado
     FROM nbo_scores s
@@ -163,6 +166,12 @@ function formatearRecomendacion(r: Record<string, any>) {
     avanza_a_mt: r.avanza_a_mt,
     drivers: (r.drivers ?? []) as Driver[],
     por_canal: (r.por_canal ?? []) as ProbaCanal[],
+    accion: r.accion,
+    fecha_aceptacion_previa: r.fecha_aceptacion_previa,
+    es_downgrade_datos: r.es_downgrade_datos,
+    n_rechazos_previos: r.n_rechazos_previos,
+    fecha_ultimo_rechazo: r.fecha_ultimo_rechazo,
+    valor_esperado_ajustado: r.valor_esperado_ajustado,
   };
 }
 
@@ -202,7 +211,9 @@ export async function getNbo(
 
   // Simulador de canal: "el cliente ya está en la tienda, ¿qué le ofrezco?".
   // Se re-rankea con las probabilidades de ESE canal, que ya vienen
-  // precalculadas en por_canal.
+  // precalculadas en por_canal. El orden respeta la misma política que el
+  // pipeline: recordatorio de contratación pendiente siempre #1, y dentro
+  // de un empate técnico de VE (2 decimales) el downgrade de datos pierde.
   if (opts.canal) {
     recs = recs
       .map((rec) => {
@@ -218,7 +229,13 @@ export async function getNbo(
             }
           : rec;
       })
-      .sort((a, b) => b.valor_esperado - a.valor_esperado)
+      .sort(
+        (a, b) =>
+          Number(b.accion === "recordatorio") - Number(a.accion === "recordatorio") ||
+          Math.round(b.valor_esperado * 100) - Math.round(a.valor_esperado * 100) ||
+          Number(a.es_downgrade_datos) - Number(b.es_downgrade_datos) ||
+          b.valor_esperado - a.valor_esperado,
+      )
       .map((rec, i) => ({ ...rec, rank: i + 1 }));
   }
 
@@ -316,12 +333,19 @@ export async function calcularAhorro(clienteId: string, ofertaId: string) {
  * `nunca_ofrecido_mt` marca la cobertura perdida: elegibles a los que jamás
  * se les presentó MT.
  *
- * ORDEN: el mismo criterio que el ranking dentro de un cliente. El valor
- * esperado se agrupa a 2 decimales porque con AUC 0.587 las diferencias
- * menores son ruido, no señal; dentro de ese grupo manda el ahorro. Sin esto,
- * un cliente al que MT le cuesta S/ 0.10 MÁS encabeza la cola por delante de
- * uno que ahorraría S/ 89.90 — la diferencia de VE entre ambos (0.4317 vs
- * 0.4315) no significa nada, pero la de ahorro decide la venta.
+ * ORDEN: el mismo criterio que el ranking dentro de un cliente, más un
+ * primer criterio que no vive en el ranking individual: un cliente con
+ * `accion = 'recordatorio'` (ya aceptó esta oferta y quedó sin completar la
+ * contratación) siempre encabeza la cola — es el lead más caliente, cerrar
+ * pesa más que abrir una venta nueva. Después decide `valor_esperado_ajustado`
+ * (el VE del modelo ya descontado por rechazos previos) agrupado a 2
+ * decimales porque con AUC 0.587 las diferencias menores son ruido, no
+ * señal; dentro de ese grupo manda el ahorro. Sin esto, un cliente al que MT
+ * le cuesta S/ 0.10 MÁS encabeza la cola por delante de uno que ahorraría
+ * S/ 89.90 — la diferencia de VE entre ambos (0.4317 vs 0.4315) no significa
+ * nada, pero la de ahorro decide la venta.
+ *
+ * `accion` filtra a solo seguimientos pendientes o solo ventas nuevas.
  *
  * Los clientes en abstención no aparecen: llamarlos para vender es
  * exactamente el error que el motor existe para evitar.
@@ -330,6 +354,7 @@ export async function getPrioridades(opts: {
   foco?: "mt" | "todos";
   canal?: string;
   soloNuncaOfertados?: boolean;
+  accion?: "oferta" | "recordatorio";
   limit?: number;
   offset?: number;
 }) {
@@ -351,11 +376,17 @@ export async function getPrioridades(opts: {
       SELECT 1 FROM historial h
        WHERE h.cliente_id = s.cliente_id AND h.oferta_es_mt)`);
   }
+  if (opts.accion) {
+    filtros.push(opts.accion);
+    cond.push(`s.accion = $${filtros.length}`);
+  }
 
   const CTE = `WITH mejor AS (
        SELECT DISTINCT ON (s.cliente_id)
               s.cliente_id, s.oferta_id, s.rank, s.valor_esperado,
-              s.prob_aceptacion, s.ahorro_soles, s.canal_sugerido, s.avanza_a_mt
+              s.valor_esperado_ajustado, s.prob_aceptacion, s.ahorro_soles,
+              s.canal_sugerido, s.avanza_a_mt, s.accion,
+              s.fecha_aceptacion_previa, s.es_downgrade_datos
          FROM nbo_scores s
          LEFT JOIN personas p ON p.cliente_id = s.cliente_id
         WHERE ${cond.join(" AND ")}
@@ -380,9 +411,10 @@ export async function getPrioridades(opts: {
        LEFT JOIN cliente_features f ON f.cliente_id = m.cliente_id
        LEFT JOIN personas p ON p.cliente_id = m.cliente_id
        LEFT JOIN ruta_mt r ON r.cliente_id = m.cliente_id
-      ORDER BY round(m.valor_esperado, 2) DESC,
+      ORDER BY (m.accion = 'recordatorio') DESC,
+               round(m.valor_esperado_ajustado, 2) DESC,
                m.ahorro_soles DESC NULLS LAST,
-               m.valor_esperado DESC,
+               m.valor_esperado_ajustado DESC,
                -- Desempate final. Sin él el orden no es total: hay grupos de
                -- ~12 clientes con las tres claves anteriores idénticas, y SQL
                -- no garantiza en qué orden los devuelve. Con LIMIT solo daba
@@ -402,6 +434,7 @@ export async function getPrioridades(opts: {
     foco,
     canal: opts.canal ?? null,
     solo_nunca_ofertados: Boolean(opts.soloNuncaOfertados),
+    accion: opts.accion ?? null,
     // `total` es cuántos clientes hay en la cola con estos filtros; `n` es
     // cuántos trae esta página. Mostrar solo `n` hacía parecer que la planta
     // entera eran 50 clientes.
@@ -657,7 +690,7 @@ export async function getJourney(clienteId: string) {
   );
 
   const cli = await queryOne<Record<string, any>>(
-    `SELECT n_reclamos, meses_moroso, dias_mora_prom
+    `SELECT n_reclamos, meses_moroso, dias_mora_prom, es_movistar_total
        FROM clientes WHERE cliente_id = $1`,
     [clienteId],
   );
@@ -673,6 +706,23 @@ export async function getJourney(clienteId: string) {
     [...conteo.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   const ofrecidosMt = eventos.filter((e) => e.oferta_es_mt).length;
 
+  // Trampa del dataset (docs/hallazgos_datos.md): hay clientes que aceptaron
+  // una oferta MT en el historial y el snapshot los sigue marcando como no-MT
+  // — la contratación nunca se completó. Sin esto el journey se lee como
+  // "nunca aceptó" cuando en realidad ya dijo que sí una vez.
+  const aceptacionesMt = eventos.filter(
+    (e) => e.oferta_es_mt && e.resultado === "aceptada",
+  );
+  const ultimaAceptacionMt = aceptacionesMt[aceptacionesMt.length - 1];
+  const mtAceptadoPendiente =
+    !cli.es_movistar_total && ultimaAceptacionMt
+      ? {
+          oferta_id: ultimaAceptacionMt.oferta_id,
+          nombre_oferta: ultimaAceptacionMt.nombre_oferta,
+          fecha: ultimaAceptacionMt.fecha,
+        }
+      : null;
+
   return {
     cliente_id: clienteId,
     resumen: {
@@ -685,6 +735,7 @@ export async function getJourney(clienteId: string) {
       veces_ofrecido_mt: ofrecidosMt,
       nunca_ofrecido_mt: ofrecidosMt === 0,
       motivo_rechazo_dominante: dominante,
+      mt_aceptado_pendiente: mtAceptadoPendiente,
     },
     eventos,
     fricciones: [

@@ -33,6 +33,17 @@ PUENTE_HOGAR = ["OF005", "OF006", "OF008", "OF009", "OF010"]
 PUENTE_POSTPAGO = ["OF001", "OF002", "OF003", "OF004"]
 MT_TIERS = ["OF020", "OF021", "OF022"]
 
+# Margen de holgura sobre el consumo promedio: el promedio esconde meses
+# pico, así que exigir GB >= consumo exacto marcaría como downgrade una
+# oferta que en la práctica le alcanza de sobra.
+MARGEN_GB_CONSUMO = 1.2
+
+# Cada rechazo reciente de ESA oferta por ESE cliente multiplica su valor
+# esperado por este factor; los rechazos viejos pesan la mitad cada
+# HALF_LIFE_RECHAZO_MESES. No se excluye la oferta, se descuenta su prioridad.
+PENALIZACION_RECHAZO = 0.75
+HALF_LIFE_RECHAZO_MESES = 6
+
 
 # ------------------------------------------------------------------ ahorro
 
@@ -200,6 +211,67 @@ def _avanza_a_mt(df: pd.DataFrame) -> pd.Series:
     )
 
 
+def _downgrade_datos(df: pd.DataFrame) -> pd.Series:
+    """¿Esta oferta le da menos GB de los que el cliente realmente consume?
+
+    No se compara contra el plan actual —perder el "ilimitado" nominal no es
+    downgrade si el cliente apenas lo usa— sino contra el consumo real con un
+    margen de holgura: así un tier con tope puede competir de verdad cuando
+    de verdad le alcanza, y queda marcado cuando no.
+    """
+    aplica = df["tipo_oferta"].isin(["plan_movil", "movistar_total"])
+    no_cubre = df["consumo_datos_gb_prom"] * MARGEN_GB_CONSUMO > df["gb_oferta"]
+    return aplica & ~df["gb_ilimitado"].astype(bool) & no_cubre.fillna(False)
+
+
+# --------------------------------------------------------------- historial
+
+
+def _recordatorios(hist: pd.DataFrame, cli_prep: pd.DataFrame) -> pd.DataFrame:
+    """Clientes que ya ACEPTARON una oferta MT pero cuya contratación nunca se
+    completó (ver docs/hallazgos_datos.md: los 9,639 casos donde el historial
+    dice `aceptada` y el snapshot sigue con `es_movistar_total = false`).
+
+    El approach correcto para estos no es una venta nueva, es retomar y
+    cerrar lo que el cliente ya dijo que sí. No se fabrica una fila si esa
+    oferta no es elegible hoy: se deja fuera del ranking y el conteo queda
+    en el log para auditar cuántos casos así hay.
+    """
+    acep = hist[(hist["resultado"] == "aceptada") & hist["oferta_es_mt"]]
+    ultimo = (
+        acep.sort_values("fecha")
+        .groupby("cliente_id")
+        .last()
+        .reset_index()[["cliente_id", "oferta_id", "fecha"]]
+        .rename(columns={"fecha": "fecha_aceptacion_previa"})
+    )
+    no_mt = cli_prep.loc[~cli_prep["es_movistar_total"], "cliente_id"]
+    return ultimo[ultimo["cliente_id"].isin(no_mt)]
+
+
+def _penalizacion_rechazos(hist: pd.DataFrame) -> pd.DataFrame:
+    """Cuánto pesan los rechazos previos de ESTA oferta para ESTE cliente.
+
+    Cada rechazo reciente multiplica el valor esperado por
+    PENALIZACION_RECHAZO; los rechazos viejos pierden peso con media vida de
+    HALF_LIFE_RECHAZO_MESES. Descuenta prioridad, no excluye la oferta.
+    """
+    rech = hist[hist["resultado"] == "rechazada"].copy()
+    meses = (pd.Timestamp(FECHA_SCORING) - rech["fecha"]).dt.days / 30.44
+    rech["_peso"] = 0.5 ** (meses / HALF_LIFE_RECHAZO_MESES)
+    agg = (
+        rech.groupby(["cliente_id", "oferta_id"])
+        .agg(
+            n_rechazos_previos=("_peso", "size"),
+            fecha_ultimo_rechazo=("fecha", "max"),
+            _carga=("_peso", "sum"),
+        )
+        .reset_index()
+    )
+    agg["_factor_rechazo"] = PENALIZACION_RECHAZO ** agg["_carga"]
+    return agg.drop(columns="_carga")
+
+
 # ----------------------------------------------------------------- momento
 
 
@@ -243,6 +315,8 @@ def _ruta_mt(
     """
     precio = dict(zip(ofertas["oferta_id"], ofertas["precio_mensual"]))
     nombre = dict(zip(ofertas["oferta_id"], ofertas["nombre_oferta"]))
+    gb_incluidos = dict(zip(ofertas["oferta_id"], ofertas["gb_incluidos"]))
+    gb_ilimitado = dict(zip(ofertas["oferta_id"], ofertas["gb_ilimitado"]))
 
     GAPS = {
         "producto_hogar": (
@@ -263,7 +337,7 @@ def _ruta_mt(
     }
 
     cand = cli_prep[cli_prep["gap_a_mt"].isin(GAPS)][
-        ["cliente_id", "gap_a_mt", "gasto_actual_total"]
+        ["cliente_id", "gap_a_mt", "gasto_actual_total", "consumo_datos_gb_prom"]
     ].copy()
     if cand.empty:
         return pd.DataFrame()
@@ -292,12 +366,19 @@ def _ruta_mt(
         j["prob_puente"] = j["prob_aceptacion"]
 
         # Gasto proyectado una vez cerrado el gap; contra eso se elige el tier
-        # de MT que de verdad le ahorra.
+        # de MT que de verdad le ahorra, pero primero se descartan los tiers
+        # que no cubren con margen el consumo real del cliente — elegir solo
+        # por precio podía proyectar un destino que es downgrade de datos.
         proyectado = j["gasto_actual_total"] + j["oferta_puente_precio"]
         tier, tier_precio = [], []
-        for gp in proyectado:
-            elegido = MT_TIERS[0]
-            for t in MT_TIERS:
+        for gp, consumo in zip(proyectado, j["consumo_datos_gb_prom"]):
+            candidatos = [
+                t for t in MT_TIERS
+                if gb_ilimitado.get(t)
+                or (pd.notna(consumo) and gb_incluidos.get(t, 0) >= consumo * MARGEN_GB_CONSUMO)
+            ] or MT_TIERS
+            elegido = candidatos[0]
+            for t in candidatos:
                 if precio[t] <= gp:
                     elegido = t
             tier.append(elegido)
@@ -325,6 +406,7 @@ def _ruta_mt(
 def main() -> None:
     cli = carga.cargar_clientes()
     ofertas = carga.cargar_ofertas()
+    hist = carga.cargar_historial()
     feats = pd.read_parquet(ARTIFACTS_DIR / "cliente_features.parquet")
     meta = json.loads((ARTIFACTS_DIR / "modelos_meta.json").read_text())
     niveles = meta["niveles"]
@@ -393,6 +475,28 @@ def main() -> None:
     completo = largo[largo["canal"] == largo["_canal_sugerido"]].copy()
     completo["ahorro_soles"] = _ahorro(completo)
 
+    # --- historial: recordatorios de contratación pendiente y rechazos
+    recordatorios = _recordatorios(hist, cli_prep)
+    completo = completo.merge(
+        recordatorios, on=["cliente_id", "oferta_id"], how="left"
+    )
+    completo["_es_recordatorio"] = completo["fecha_aceptacion_previa"].notna()
+    completo["accion"] = np.where(
+        completo["_es_recordatorio"], "recordatorio", "oferta"
+    )
+    log(
+        f"recordatorios en ranking: {completo['_es_recordatorio'].sum():,} de "
+        f"{len(recordatorios):,} aceptaciones MT pendientes de contratar"
+    )
+
+    rechazos = _penalizacion_rechazos(hist)
+    completo = completo.merge(rechazos, on=["cliente_id", "oferta_id"], how="left")
+    completo["n_rechazos_previos"] = completo["n_rechazos_previos"].fillna(0).astype(int)
+    completo["_factor_rechazo"] = completo["_factor_rechazo"].fillna(1.0)
+    completo["valor_esperado_ajustado"] = (
+        completo["valor_esperado"] * completo["_factor_rechazo"]
+    ).round(4)
+
     # POLÍTICA DE RANKING — el orden es política de negocio declarada, no solo
     # salida del modelo, y esto es deliberado:
     #
@@ -400,27 +504,47 @@ def main() -> None:
     # 4 decimales son la norma) ni entre los tres tiers de MT (en el historial
     # convierten 0.696 / 0.702 / 0.693). Con AUC 0.587 y Brier 0.227,
     # diferencias de VE menores a 0.01 están por debajo de la resolución del
-    # modelo: son ruido, no señal. Dentro de ese empate técnico decide la
-    # estrategia del desafío, en este orden:
+    # modelo: son ruido, no señal. El orden:
     #
-    #   1. `avanza_a_mt`: la oferta es MT o es el puente que cierra el gap del
-    #      cliente. Es el blindaje: la razón de ser del motor.
-    #   2. No downgrades: un plan móvil más barato solo "gana" porque el
-    #      desempate por ahorro lo premia, pero baja ARPU (KPI de la ficha) y
-    #      no es una jugada proactiva de venta — es una palanca de retención.
-    #   3. Valor esperado exacto, ahorro para el cliente, precio.
-    completo["_ve_bucket"] = completo["valor_esperado"].round(2)
+    #   0. `_es_recordatorio`: el cliente ya dijo que sí a esta oferta y la
+    #      contratación nunca se completó. Es el lead más caliente que existe
+    #      y siempre es rank 1 — no es venta nueva, es cierre.
+    #   1. El VE ajustado agrupado a 2 decimales: donde el modelo ve una
+    #      diferencia real, el modelo manda. El ajuste descuenta rechazos
+    #      previos de esa misma oferta a ese mismo cliente — un tier que el
+    #      cliente ya rechazó por caro baja de grupo y deja pasar al
+    #      intermedio, que es lo que un asesor haría.
+    #   2. Dentro del empate técnico, primero pierde el downgrade: ni de
+    #      precio (un plan móvil más barato baja ARPU) ni de datos (un tier
+    #      —incluido MT— con menos GB de los que el cliente realmente
+    #      consume). Antes esto solo cubría precio en plan_movil, y por eso
+    #      un MT Básico podía salir #1 sobre un cliente con plan ilimitado.
+    #      Se compara contra el consumo real, no contra el plan actual: una
+    #      oferta con tope sigue compitiendo cuando de verdad le alcanza. Y
+    #      pierde DENTRO de su empate, no contra toda la lista: un tier MT
+    #      corto de GB queda detrás del tier que sí cubre, pero no sepultado
+    #      bajo accesorios de conversión marginal.
+    #   3. `avanza_a_mt`: la oferta es MT o es el puente que cierra el gap
+    #      del cliente. Blindaje — pero ya no puede empujar un downgrade
+    #      por encima del tier que sí le alcanza.
+    #   4. Valor esperado ajustado exacto, ahorro para el cliente, precio.
     completo["avanza_a_mt"] = _avanza_a_mt(completo)
+    completo["es_downgrade_datos"] = _downgrade_datos(completo)
     completo["_es_downgrade"] = (
-        (completo["tipo_oferta"] == "plan_movil")
-        & (completo["precio_mensual"] < completo["_precio_plan_actual"])
+        completo["es_downgrade_datos"]
+        | (
+            (completo["tipo_oferta"] == "plan_movil")
+            & (completo["precio_mensual"] < completo["_precio_plan_actual"])
+        )
     )
+    completo["_ve_bucket"] = completo["valor_esperado_ajustado"].round(2)
     completo = completo.sort_values(
         [
-            "cliente_id", "_ve_bucket", "avanza_a_mt", "_es_downgrade",
-            "valor_esperado", "ahorro_soles", "precio_mensual",
+            "cliente_id", "_es_recordatorio", "_ve_bucket", "_es_downgrade",
+            "avanza_a_mt", "valor_esperado_ajustado", "ahorro_soles",
+            "precio_mensual",
         ],
-        ascending=[True, False, False, True, False, False, True],
+        ascending=[True, False, False, True, False, False, False, True],
         na_position="last",
     )
     completo["rank"] = completo.groupby("cliente_id").cumcount() + 1
@@ -486,7 +610,6 @@ def main() -> None:
     principal["drivers"] = drivers
 
     # --- momento sugerido
-    hist = carga.cargar_historial()
     rebate = json.loads((ARTIFACTS_DIR / "rebate_matrix.json").read_text())
     mm = next(m for m in rebate["motivos"] if m["motivo"] == "mal_momento")
     mediana = next(
@@ -501,11 +624,13 @@ def main() -> None:
         "cliente_id", "oferta_id", "rank", "prob_contacto", "prob_aceptacion",
         "valor_esperado", "ahorro_soles", "ahorro_pct_real", "avanza_a_mt",
         "drivers", "por_canal", "momento_sugerido", "momento_origen",
-        "canal_origen",
+        "canal_origen", "accion", "fecha_aceptacion_previa",
+        "es_downgrade_datos", "n_rechazos_previos", "fecha_ultimo_rechazo",
+        "valor_esperado_ajustado",
     ]
     salida = principal[cols].copy()
     salida["canal_sugerido"] = principal["_canal_sugerido"]
-    for c in ("prob_contacto", "prob_aceptacion", "valor_esperado"):
+    for c in ("prob_contacto", "prob_aceptacion", "valor_esperado", "valor_esperado_ajustado"):
         salida[c] = salida[c].round(4)
     salida["drivers"] = salida["drivers"].map(lambda d: json.dumps(d, ensure_ascii=False))
     salida.to_parquet(ARTIFACTS_DIR / "nbo_scores.parquet", index=False)

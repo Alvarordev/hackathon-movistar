@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ChevronRight, Route, Shield, Sparkles } from "lucide-react";
+import { AlertTriangle, ChevronRight, Clock, Route, Shield, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/Base";
-import { etiquetaGap, pct, soles } from "@/lib/api";
+import { etiquetaGap, fecha, pct, soles } from "@/lib/api";
 import type { ClientePrioridad } from "@/lib/tipos";
 
 /**
@@ -44,6 +44,17 @@ export function TablaCola({ clientes }: { clientes: ClientePrioridad[] }) {
                 >
                   {c.cliente_id}
                 </Link>
+                {c.accion === "recordatorio" ? (
+                  <div className="mt-1">
+                    <Badge tono="aviso" icono={<Clock size={10} />}>
+                      Aceptó MT
+                      {c.fecha_aceptacion_previa
+                        ? ` el ${fecha(c.fecha_aceptacion_previa)}`
+                        : ""}{" "}
+                      — pendiente
+                    </Badge>
+                  </div>
+                ) : null}
                 {c.nunca_ofrecido_mt ? (
                   <div className="mt-1">
                     <Badge tono="aviso" icono={<Sparkles size={10} />}>
@@ -71,6 +82,11 @@ export function TablaCola({ clientes }: { clientes: ClientePrioridad[] }) {
                     >
                       Blindaje
                     </Badge>
+                  ) : null}
+                  {c.es_downgrade_datos ? (
+                    <span title="Menos GB de los que el cliente usa/tiene hoy">
+                      <AlertTriangle size={12} className="shrink-0 text-alerta" />
+                    </span>
                   ) : null}
                 </div>
                 {c.tiene_ruta_mt ? (
